@@ -59,6 +59,12 @@ public class ResumeController {
         return Result.success(list);
     }
 
+    @GetMapping("/status/all")
+    public Result<List<ResumeAnalysisVO>> listResumeStatus() {
+        Long userId = BaseContext.getCurrentId();
+        return Result.success(resumeService.listResumeStatus(userId));
+    }
+
     @GetMapping("/analysis/result")
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 30)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 5)

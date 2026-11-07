@@ -1,20 +1,25 @@
 <script setup lang="ts">
-import {onMounted, ref} from 'vue'
+import {onMounted, ref, onUnmounted} from 'vue'
 import { useRouter } from 'vue-router'
 import { Document, Collection, Loading } from '@element-plus/icons-vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {createInterviewWithKb,
   createInterviewWithResume,
   getResumeList,
+  getSession,
   type CreateInterviewSessionDTO,
   type CreateKbInterviewSessionDTO,
   getKnowledgeBaseList,
   type ResumeVO,
   type KnowledgeBaseVO,
-  type InterviewSessionVO
+  type InterviewSessionVO,
+  type AsyncTaskStatus
 } from "@/api/business.ts";
 
 const router = useRouter()
+
+const CURRENT_SESSION_KEY = 'currentInterviewSessionId'
+const POLL_INTERVAL = 2000
 
 interface Resume {
   id: number
@@ -39,6 +44,9 @@ const selectedKnowledge = ref('')
 const resumeOptions = ref<Resume[]>([])
 const knowledgeOptions = ref<Knowledge[]>([])
 const loading = ref(false)
+
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
   try {
     const [resumeRes, kbRes] = await Promise.all([getResumeList(), getKnowledgeBaseList()])
@@ -60,6 +68,90 @@ onMounted(async () => {
     console.error('获取素材列表失败', error)
   }
 })
+
+onUnmounted(() => {
+  stopPolling()
+})
+
+// 抽取公共逻辑：根据已选素材创建面试会话，返回 sessionId
+const createSession = async (): Promise<string> => {
+  const hasResume = !!selectedResume.value;
+  const hasKb = !!selectedKnowledge.value;
+  const requestId = crypto.randomUUID();
+  resumeDto.value.requestId = requestId;
+  kbDto.value.requestId = requestId;
+
+  // 同时选择时，让用户选择基于哪个素材面试
+  if (hasResume && hasKb) {
+    return new Promise<string>((resolve) => {
+      ElMessageBox.confirm(
+          '您同时选择了简历和知识库，请决定本次面试将基于哪一个进行？',
+          '选择面试模式',
+          {
+            distinguishCancelAndClose: true,
+            confirmButtonText: '基于简历面试',
+            cancelButtonText: '基于知识库面试',
+            type: 'info',
+          }
+      ).then(async () => {
+        resumeDto.value.resumeId = Number(selectedResume.value)
+        const result = await createInterviewWithResume(resumeDto.value) as InterviewSessionVO | null
+        resolve(result?.sessionId || '')
+      }).catch(async (action: string) => {
+        if (action === 'cancel') {
+          kbDto.value.kbId = Number(selectedKnowledge.value)
+          const result = await createInterviewWithKb(kbDto.value) as InterviewSessionVO | null
+          resolve(result?.sessionId || '')
+        } else {
+          resolve('')
+        }
+      })
+    })
+  }
+
+  if (hasResume) {
+    resumeDto.value.resumeId = Number(selectedResume.value)
+    const result = await createInterviewWithResume(resumeDto.value) as InterviewSessionVO | null
+    return result?.sessionId || ''
+  }
+
+  kbDto.value.kbId = Number(selectedKnowledge.value)
+  const result = await createInterviewWithKb(kbDto.value) as InterviewSessionVO | null
+  return result?.sessionId || ''
+}
+
+const stopPolling = () => {
+  if (pollingTimer !== null) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
+
+// 轮询面试题目生成状态，COMPLETED 才跳转面试页
+const startPolling = (sessionId: string) => {
+  stopPolling()
+  pollingTimer = setInterval(async () => {
+    try {
+      const session = await getSession(sessionId) as InterviewSessionVO | null
+      const status = session?.generationStatus as AsyncTaskStatus | undefined
+      if (status === 'COMPLETED') {
+        stopPolling()
+        localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
+        router.push(`/backend/interview/exam/${sessionId}`)
+      } else if (status === 'FAILED') {
+        stopPolling()
+        loading.value = false
+        ElMessage.error('AI 出题失败，请稍后重试')
+      }
+    } catch (error) {
+      console.error('查询面试状态失败:', error)
+      stopPolling()
+      loading.value = false
+      ElMessage.error('查询面试状态失败，请稍后重试')
+    }
+  }, POLL_INTERVAL)
+}
+
 // 开始面试
 const handleStart = async () => {
   const hasResume = !!selectedResume.value;
@@ -73,59 +165,21 @@ const handleStart = async () => {
     }
     return
   }
-  const requestId = crypto.randomUUID();
-  resumeDto.value.requestId = requestId;
-  kbDto.value.requestId = requestId;
 
   loading.value = true
   try {
-    let sessionId = ''
-
-    if (hasResume && hasKb) {
-      try {
-        await ElMessageBox.confirm(
-            '您同时选择了简历和知识库，请决定本次面试将基于哪一个进行？',
-            '选择面试模式',
-            {
-              distinguishCancelAndClose: true,
-              confirmButtonText: '基于简历面试',
-              cancelButtonText: '基于知识库面试',
-              type: 'info',
-            }
-        )
-        resumeDto.value.resumeId = Number(selectedResume.value)
-        const result = await createInterviewWithResume(resumeDto.value) as InterviewSessionVO | null
-        sessionId = result?.sessionId || ''
-      } catch (action) {
-        if (action === 'cancel') {
-          kbDto.value.kbId = Number(selectedKnowledge.value)
-          const result = await createInterviewWithKb(kbDto.value) as InterviewSessionVO | null
-          sessionId = result?.sessionId || ''
-        } else {
-          loading.value = false
-          return
-        }
-      }
-    } else if (hasResume) {
-      resumeDto.value.resumeId = Number(selectedResume.value)
-      const result = await createInterviewWithResume(resumeDto.value) as InterviewSessionVO | null
-      sessionId = result?.sessionId || ''
-    } else {
-      kbDto.value.kbId = Number(selectedKnowledge.value)
-      const result = await createInterviewWithKb(kbDto.value) as InterviewSessionVO | null
-      sessionId = result?.sessionId || ''
-    }
-
+    const sessionId = await createSession()
     if (sessionId) {
-      router.push(`/backend/interview/exam/${sessionId}`)
+      localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
+      startPolling(sessionId)
     } else {
+      loading.value = false
       ElMessage.error('AI 出题失败，请稍后重试')
     }
   } catch (error) {
+    loading.value = false
     console.error('创建面试失败:', error)
     ElMessage.error('创建面试会话失败，请稍后重试')
-  } finally {
-    loading.value = false
   }
 }
 </script>

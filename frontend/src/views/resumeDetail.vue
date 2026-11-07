@@ -139,7 +139,6 @@ const handleInterview = () => {
                   :stroke-width="8"
               />
             </div>
-
           </div>
         </el-col>
       </el-row>
@@ -185,7 +184,7 @@ const handleInterview = () => {
 }
 .resume-detail-content{
   min-height: 100vh;
-  gap:15px;
+  gap:65px;
   display: flex;
   flex-direction: column;
 }
@@ -196,7 +195,6 @@ const handleInterview = () => {
   padding: 24px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); /* 极浅的阴影，看起来更有质感 */
   height: 100%;
-  box-sizing: border-box;
 }
 
 .card-header {

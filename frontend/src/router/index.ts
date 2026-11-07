@@ -82,6 +82,15 @@ const router = createRouter({
           }
         },
         {
+          path: '/backend/knowledgeBase/detail/:id',
+          name: 'knowledgeBaseDetail',
+          component: () => import('@/views/kbDetail.vue'),
+          meta: {
+            title: '知识库详情',
+            icon: 'DocumentDetail'
+          }
+        },
+        {
           path: 'resume/detail/:id',
           name: 'resumeDetail',
           component: () => import('@/views/resumeDetail.vue'),
@@ -91,7 +100,7 @@ const router = createRouter({
           }
         },
         {
-          path: 'interview/exam',
+          path: 'interview/exam/:sessionId',
           name: 'interviewExam',
           component: () => import('@/views/interviewExam.vue'),
           meta: {
@@ -99,6 +108,15 @@ const router = createRouter({
             icon: 'Monitor'
           }
         },
+        {
+          path: 'record/detail/:sessionId',
+          name: 'recordDetail',
+          component: () => import('@/views/recordDetail.vue'),
+          meta: {
+            title: '面试记录详情',
+            icon: 'DocumentDetail'
+          }
+        }
       ]
     }
   ]

@@ -11,11 +11,11 @@ const router = useRouter();
 const POLL_INTERVAL = 2000;
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
-const statusMap: Record<AsyncTaskStatus, { icon: any; text: string }> = {
-  PENDING: { icon: CirclePlus, text: '待分析' },
-  PROCESSING: { icon: Loading, text: '分析中' },
-  COMPLETED: { icon: CircleCheck, text: '已完成' },
-  FAILED: { icon: CircleClose, text: '失败' },
+const statusMap: Record<AsyncTaskStatus, { icon: any; text: string; color: string }> = {
+  PENDING: { icon: CirclePlus, text: '待分析', color: '#909399' },
+  PROCESSING: { icon: Loading, text: '分析中', color: '#e6a23c' },
+  COMPLETED: { icon: CircleCheck, text: '已完成', color: '#67c23a' },
+  FAILED: { icon: CircleClose, text: '失败', color: '#f56c6c' },
 };
 const analysis = async (resumeId: number) => {
   try {
@@ -98,6 +98,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div class="resume-container">
     <div class="resume-header">
       <div class="header-left">
         <div class="title">
@@ -199,9 +200,13 @@ onUnmounted(() => {
         </el-table-column>
       </el-table>
     </div>
+  </div>
 </template>
 
 <style scoped>
+.resume-container {
+  padding: 20px;
+}
 .name-with-icon {
   display: flex;
   align-items: center;

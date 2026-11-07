@@ -153,8 +153,6 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         if (resumeContent.isEmpty()) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "简历不存在");
         }
-
-
         //保存面试会话
         InterviewSession interviewSession = InterviewSession.builder()
                 .sessionId(UUID.randomUUID().toString())
@@ -281,6 +279,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .totalQuestions(voList.size())
                 .kbId(kbId)
                 .status(InterviewSession.STATUS_CREATED)
+                .generationStatus(AsyncTaskStatus.COMPLETED)
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -310,7 +309,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
     }
 
     @Transactional
-    public void submit(QuestionAnswer qa, Long userId){
+    public InterviewSessionVO submit(QuestionAnswer qa, Long userId){
         InterviewSession interviewSession = lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
                 .eq(InterviewSession::getSessionId, qa.sessionId())
@@ -361,6 +360,14 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 }
             });
         }
+
+        return new InterviewSessionVO(
+                interviewSession.getSessionId(),
+                interviewSession.getUserId(),
+                interviewSession.getCurrentIndex(),
+                interviewSession.getStatus(),
+                interviewSession.getGenerationStatus()
+        );
     }
 
     public void sendGenerateTask(String sessionId, Long userId) {
@@ -687,18 +694,60 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         );
     }
 
-    public InterviewSessionVO getSessionDetail(String sessionId, Long userId){
+    public InterviewSessionVO getSession(String sessionId, Long userId){
         InterviewSession session = lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
                 .eq(InterviewSession::getSessionId, sessionId)
                 .one();
         if (session == null) throw new BusinessException(HttpStatus.NOT_FOUND, "会话不存在");
+        return new InterviewSessionVO(
+                session.getSessionId(),
+                session.getUserId(),
+                session.getCurrentIndex(),
+                session.getStatus(),
+                session.getGenerationStatus());
+    }
+
+    public List<InterviewSessionVO> listSessions(Long userId) {
+        return lambdaQuery()
+                .eq(InterviewSession::getUserId, userId)
+                .orderByDesc(InterviewSession::getSessionId)
+                .list()
+                .stream()
+                .map(s -> new InterviewSessionVO(
+                        s.getSessionId(),
+                        s.getUserId(),
+                        s.getCurrentIndex(),
+                        s.getStatus(),
+                        s.getGenerationStatus()))
+                .toList();
+    }
+
+    public String findActiveSessionId(Long userId) {
+        InterviewSession session = lambdaQuery()
+                .eq(InterviewSession::getUserId, userId)
+                .eq(InterviewSession::getStatus, InterviewSession.STATUS_CREATED)
+                .orderByDesc(InterviewSession::getSessionId)
+                .last("limit 1")
+                .one();
+        return session == null ? null : session.getSessionId();
+    }
+
+    public List<InterviewQuestionVO> getSessionQuestions(String sessionId, Long userId) {
+        InterviewSession session = lambdaQuery()
+                .eq(InterviewSession::getUserId, userId)
+                .eq(InterviewSession::getSessionId, sessionId)
+                .one();
+        if (session == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "会话不存在");
+        }
 
         List<InterviewQuestion> questions = interviewQuestionMapper.selectList(
                 new LambdaQueryWrapper<InterviewQuestion>()
                         .eq(InterviewQuestion::getSessionId, sessionId)
                         .orderByAsc(InterviewQuestion::getQuestionIndex));
-        List<InterviewQuestionVO> vos = questions.stream()
+
+        return questions.stream()
                 .map(q -> new InterviewQuestionVO(
                         q.getQuestionIndex(),
                         q.getQuestionContent(),
@@ -706,13 +755,6 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                         q.getType(),
                         q.getUserAnswer()))
                 .toList();
-
-        return new InterviewSessionVO(
-                session.getSessionId(),
-                session.getUserId(),
-                session.getCurrentIndex(),
-                session.getStatus(),
-                session.getGenerationStatus());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -733,34 +775,6 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
 
         // 3. 删除会话本身
         this.removeById(session.getSessionId());
-    }
-
-    public void updateAnswer(QuestionAnswer qa, Long userId) {
-        // 1. 校验会话状态
-        InterviewSession session = lambdaQuery()
-                .eq(InterviewSession::getUserId, userId)
-                .eq(InterviewSession::getSessionId, qa.sessionId())
-                .one();
-        if (session == null) throw new BusinessException(HttpStatus.NOT_FOUND, "会话不存在");
-        if (!InterviewSession.STATUS_CREATED.equals(session.getStatus())) {
-            throw new BusinessException(HttpStatus.CONFLICT, "当前状态不可修改答案");
-        }
-
-        // 2. 只能修改历史题目（即当前进度之前的题）
-        if (qa.currentIndex() >= session.getCurrentIndex()) {
-            throw new BusinessException(HttpStatus.CONFLICT, "只能修改已提交的题目，当前题目请直接提交");
-        }
-
-        // 3. 更新题目答案
-        boolean updated = interviewQuestionMapper.update(null, new LambdaUpdateWrapper<InterviewQuestion>()
-                .eq(InterviewQuestion::getSessionId, qa.sessionId())
-                .eq(InterviewQuestion::getQuestionIndex, qa.currentIndex())
-                .set(InterviewQuestion::getUserAnswer, qa.answer())
-        ) > 0;
-
-        if (!updated) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "题目不存在或修改失败");
-        }
     }
 
     private String fetchResumeContent(Long resumeId){

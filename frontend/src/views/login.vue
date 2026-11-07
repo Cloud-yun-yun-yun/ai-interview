@@ -18,14 +18,17 @@ const handleLogin = async ()=>{
     ElMessage.error('必填项为空')
     return
   }
-  const token = await login(loginForm.value)
-  console.log(token)
-  if(!token){
+  const result = await login(loginForm.value)
+  console.log(result)
+  if(!result){
     ElMessage.error('登录失败')
     return
   }else{
-    console.log(token)
-    localStorage.setItem('token',String(token))
+    console.log(result)
+    localStorage.setItem('token',String(result.token))
+    if (result.activeSessionId) {
+      localStorage.setItem('currentInterviewSessionId', String(result.activeSessionId))
+    }
   }
   ElMessage.success('登录成功')
   const redirect = route.query.redirect as string

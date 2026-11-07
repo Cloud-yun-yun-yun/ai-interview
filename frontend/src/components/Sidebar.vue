@@ -65,7 +65,7 @@ const handleLogout = async () => {
               :key="item.path"
               :index="item.path"
               @click="handleMenuClick(item.path)"
-              style="height: 70px; line-height: 70px; font-size: 15px;"
+              style="height: 60px; line-height: 60px; font-size: 16px;"
           >
             <el-icon class="sidebar-icon">
               <component :is="getIcon(item.meta?.icon as string)" />

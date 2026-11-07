@@ -82,6 +82,10 @@ export function getResumeStatusBatch(resumeIds: number[]) {
     }) as any
 }
 
+export function getResumeStatusAll() {
+    return service.get<ResumeStatusVO[]>('/api/resume/status/all') as any
+}
+
 export type InterviewSessionStatus = 'CREATED' | 'SUBMITTED' | 'EVALUATED';
 
 export interface InterviewQuestionVO {
@@ -97,8 +101,7 @@ export interface InterviewSessionVO {
     userId: number;
     currentIndex: number;
     status: InterviewSessionStatus;
-    totalQuestions: number;
-    questions: InterviewQuestionVO[];
+    generationStatus: AsyncTaskStatus
 }
 
 export interface CreateInterviewSessionDTO {
@@ -112,11 +115,33 @@ export interface CreateKbInterviewSessionDTO {
 }
 
 export function createInterviewWithResume(dto: CreateInterviewSessionDTO) {
-    return service.post<InterviewSessionVO>('/api/interview/session/create', dto) as any
+    return service.post<InterviewSessionVO>('/api/interview/session/create/resume', dto) as any
 }
 
 export function createInterviewWithKb(dto: CreateKbInterviewSessionDTO) {
-    return service.post<InterviewSessionVO>('/api/interview/session/kbcreate', dto) as any
+    return service.post<InterviewSessionVO>('/api/interview/session/create/kb', dto) as any
+}
+
+export function getSessionQuestions(sessionId: string) {
+    return service.get<InterviewQuestionVO[]>('/api/interview/session/question', { params: { sessionId } }) as any
+}
+
+export function getSession(sessionId: string) {
+    return service.get<InterviewSessionVO>('/api/interview/session/detail', { params: { sessionId } }) as any
+}
+
+export function getSessionList() {
+    return service.get<InterviewSessionVO[]>('/api/interview/session/list') as any
+}
+
+export interface QuestionAnswer {
+    sessionId: string;
+    answer: string;
+    currentIndex: number;
+}
+
+export function submitAnswer(qa: QuestionAnswer) {
+    return service.post<InterviewSessionVO>('/api/interview/answers/submit', qa) as any
 }
 
 export type QuestionGenStatus = 'NONE' | 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
@@ -131,4 +156,7 @@ export interface KnowledgeBaseVO {
 }
 export function getKnowledgeBaseList() {
     return service.get<KnowledgeBaseVO[]>('/api/kbs/list') as any
+}
+export function deleteKnowledgeBase(kbId: number) {
+    return service.delete(`/api/kbs/${kbId}`) as any
 }

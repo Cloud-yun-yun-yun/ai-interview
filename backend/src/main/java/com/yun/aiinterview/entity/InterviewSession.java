@@ -71,4 +71,3 @@ public class InterviewSession {
     @TableField("async_task_status")
     private AsyncTaskStatus asyncTaskStatus;
 }
-

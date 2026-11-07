@@ -1,6 +1,7 @@
 package com.yun.aiinterview.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -297,10 +298,10 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
     }
 
     private void updateResumeStatus(Long resumeId, AsyncTaskStatus status) {
-        Resume resume = new Resume();
-        resume.setId(resumeId);
-        resume.setAsyncTaskStatus(status);
-        resumeMapper.updateById(resume);
+        resumeMapper.update(null,
+                new LambdaUpdateWrapper<Resume>()
+                        .eq(Resume::getId, resumeId)
+                        .set(Resume::getAsyncTaskStatus, status));
     }
 
     private ResumeAnalysisResponse doAnalysis(Resume resume, Long userId) {
@@ -481,6 +482,16 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
                         .in(Resume::getId, resumeIds)
                         .eq(Resume::getUserId, userId));
         return resumes.stream()
+                .map(r -> new ResumeAnalysisVO(r.getId(), r.getAsyncTaskStatus()))
+                .collect(Collectors.toList());
+    }
+
+    public List<ResumeAnalysisVO> listResumeStatus(Long userId) {
+        return resumeMapper.selectList(
+                        new LambdaQueryWrapper<Resume>()
+                                .eq(Resume::getUserId, userId)
+                                .orderByDesc(Resume::getId))
+                .stream()
                 .map(r -> new ResumeAnalysisVO(r.getId(), r.getAsyncTaskStatus()))
                 .collect(Collectors.toList());
     }

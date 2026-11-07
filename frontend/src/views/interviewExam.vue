@@ -1,28 +1,137 @@
 <script setup lang="ts">
-import {Monitor, Promotion, User} from "@element-plus/icons-vue";
+import { onMounted, ref, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Monitor, Promotion, User } from "@element-plus/icons-vue"
+import {
+  getSession,
+  getSessionQuestions,
+  submitAnswer,
+  type InterviewSessionVO,
+  type InterviewQuestionVO
+} from "@/api/business"
+import { ElMessage } from "element-plus"
+//todo 重构页面布局，改善面试题目展示方式
+const route = useRoute()
+const router = useRouter()
+
+const sessionId = String(route.params.sessionId || '')
+
+const session = ref<InterviewSessionVO | null>(null)
+const questions = ref<InterviewQuestionVO[]>([])
+const loading = ref(true)
+const submitting = ref(false)
+const currentIndex = ref(0)
+const answerText = ref('')
+
+const currentQuestion = computed<InterviewQuestionVO | null>(() => {
+  return questions.value.find(q => q.questionIndex === currentIndex.value) || null
+})
+
+const progressPercent = computed(() => {
+  if (questions.value.length === 0) return 0
+  return Math.round((currentIndex.value / questions.value.length) * 100)
+})
+
+onMounted(async () => {
+  if (!sessionId) {
+    ElMessage.error('缺少面试会话参数')
+    loading.value = false
+    return
+  }
+  try {
+    const [sessionRes, questionsRes] = await Promise.all([
+      getSession(sessionId) as Promise<InterviewSessionVO | null>,
+      getSessionQuestions(sessionId) as Promise<InterviewQuestionVO[] | null>
+    ])
+    session.value = sessionRes
+    questions.value = questionsRes || []
+    if (sessionRes) {
+      currentIndex.value = sessionRes.currentIndex || 0
+    }
+    // 回显当前题目已存的答案（历史题目，重进时可见）
+    answerText.value = currentQuestion.value?.userAnswer || ''
+  } catch (error) {
+    console.error('加载面试数据失败:', error)
+    ElMessage.error('加载面试失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
+})
+
+const handleSubmit = async () => {
+  const q = currentQuestion.value
+  if (!q || !sessionId) return
+  if (!answerText.value || answerText.value.trim() === '') {
+    ElMessage.warning('请先填写回答内容')
+    return
+  }
+  submitting.value = true
+  try {
+    const vo = await submitAnswer({
+      sessionId,
+      answer: answerText.value,
+      currentIndex: currentIndex.value
+    }) as InterviewSessionVO | null
+    if (vo) {
+      session.value = vo
+      if (vo.status !== 'CREATED') {
+        ElMessage.success('面试已提交，正在生成评估...')
+        router.push(`/backend/record`)
+        return
+      }
+      currentIndex.value = vo.currentIndex
+      answerText.value = ''
+      ElMessage.success('回答已提交，进入下一题')
+    }
+  } catch (error: any) {
+    const errMsg = error?.response?.data?.message || error?.message || '提交失败'
+    ElMessage.error(errMsg)
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
-
-  <div class="exam-container">
+  <div v-if="loading" class="exam-container">
     <div class="exam-header">
       <div class="header-title">
-        <div class="title-icon">
-          <el-icon><Monitor/></el-icon>
-        </div>
+        <div class="title-icon"><el-icon><Monitor/></el-icon></div>
+        <span class="title-text">模拟面试</span>
+      </div>
+      <span>正在加载面试数据...</span>
+    </div>
+  </div>
+
+  <div v-else-if="!currentQuestion" class="exam-container">
+    <div class="exam-header">
+      <div class="header-title">
+        <div class="title-icon"><el-icon><Monitor/></el-icon></div>
+        <span class="title-text">模拟面试</span>
+      </div>
+      <span>暂无可用题目</span>
+    </div>
+  </div>
+
+  <div v-else class="exam-container">
+    <div class="exam-header">
+      <div class="header-title">
+        <div class="title-icon"><el-icon><Monitor/></el-icon></div>
         <span class="title-text">模拟面试</span>
       </div>
       <span>认真回答问题展示你的实力</span>
     </div>
+
     <div class="exam-progress">
-      <div>题目 1/6</div>
+      <div>题目 {{ currentIndex }} / {{ questions.length }}</div>
       <el-progress
-          :percentage=100
+          :percentage="progressPercent"
           :show-text="false"
           color="#626aef"
           :stroke-width="8"
       />
     </div>
+
     <div class="exam-content">
       <div class="content-question">
         <div class="in-content">
@@ -30,16 +139,17 @@ import {Monitor, Promotion, User} from "@element-plus/icons-vue";
           <div class="in-message">
             <div class="message-header">
               <span>面试官</span>
-              <el-tag>JVM</el-tag>
+              <el-tag v-if="currentQuestion.topicSummary">{{ currentQuestion.topicSummary }}</el-tag>
             </div>
-            <span class="in-message-content">请谈谈你对Java虚拟机（JVM）内存模型的理解，以及常见的垃圾回收算法有哪些？</span>
+            <span class="in-message-content">{{ currentQuestion.questionContent }}</span>
           </div>
         </div>
-        <div class="user-content">
-          <span class="user-message-content">JVM允许Java字节码，GC分多种算法回收对象</span>
+        <div v-if="currentQuestion.userAnswer" class="user-content">
+          <span class="user-message-content">{{ currentQuestion.userAnswer }}</span>
           <div class="normal-image"><el-icon><User /></el-icon></div>
         </div>
       </div>
+
       <div class="content-answer">
         <div class="answer-wrapper">
           <el-input
@@ -48,8 +158,15 @@ import {Monitor, Promotion, User} from "@element-plus/icons-vue";
               :rows="4"
               resize="none"
               placeholder="请输入你的回答..."
+              v-model="answerText"
           ></el-input>
-          <el-button type="primary" class="submit-btn" :icon="Promotion">提交</el-button>
+          <el-button
+              type="primary"
+              class="submit-btn"
+              :icon="Promotion"
+              :loading="submitting"
+              @click="handleSubmit"
+          >提交</el-button>
         </div>
       </div>
     </div>
