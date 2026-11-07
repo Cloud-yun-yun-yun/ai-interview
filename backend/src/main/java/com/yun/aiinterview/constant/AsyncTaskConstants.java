@@ -90,4 +90,17 @@ public class AsyncTaskConstants {
      * 面试评估 Consumer 名称前缀
      */
     public static final String INTERVIEW_EVALUATION_CONSUMER_PREFIX = "interview-evaluation-consumer-";
+
+    /**
+     * 面试出题 Stream Key
+     */
+    public static final String INTERVIEW_QUESTION_GEN_STREAM_KEY = "interview:question-gen:stream";
+    /**
+     * 面试出题 Consumer Group 名称
+     */
+    public static final String INTERVIEW_QUESTION_GEN_GROUP_NAME = "interview-question-gen-group";
+    /**
+     * 面试出题 Consumer 名称前缀
+     */
+    public static final String INTERVIEW_QUESTION_GEN_CONSUMER_PREFIX = "interview-question-gen-consumer-";
 }

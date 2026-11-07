@@ -13,4 +13,13 @@
         </foreach>
     </insert>
 
+    <insert id="insertList">
+        INSERT INTO interview_question
+        (session_id, question_index, question_content, topic_summary, type)
+        VALUES
+        <foreach collection="list" item="q" separator=",">
+            (#{q.sessionId}, #{q.questionIndex}, #{q.questionContent}, #{q.topicSummary}, #{q.type})
+        </foreach>
+    </insert>
+
 </mapper>

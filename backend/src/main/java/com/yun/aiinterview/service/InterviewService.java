@@ -40,12 +40,16 @@ import java.util.stream.IntStream;
 
 import static com.yun.aiinterview.constant.AsyncTaskConstants.BATCH_SIZE;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.FIELD_RETRY_COUNT;
+import static com.yun.aiinterview.constant.AsyncTaskConstants.FIELD_RESUME_ID;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.FIELD_SESSION_ID;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.FIELD_USER_ID;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.INTERVIEW_EVALUATION_CONSUMER_PREFIX;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.INTERVIEW_EVALUATION_GROUP_NAME;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.INTERVIEW_EVALUATION_STREAM_KEY;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.MAX_RETRY_COUNT;
+import static com.yun.aiinterview.constant.AsyncTaskConstants.INTERVIEW_QUESTION_GEN_CONSUMER_PREFIX;
+import static com.yun.aiinterview.constant.AsyncTaskConstants.INTERVIEW_QUESTION_GEN_GROUP_NAME;
+import static com.yun.aiinterview.constant.AsyncTaskConstants.INTERVIEW_QUESTION_GEN_STREAM_KEY;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.PENDING_CLAIM_BATCH_SIZE;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.PENDING_IDLE_TIMEOUT_MS;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.POLL_INTERVAL_MS;
@@ -69,6 +73,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
 
     private static final String threadName = "interview-evaluation-consumer";
     private String consumerName;
+
+    private static final String questionGenThreadName = "interview-question-gen-consumer";
+    private String questionGenConsumerName;
 
     private static final String CACHE_LOCK_PREFIX = "interview:session:lock:";
     public InterviewService(ResumeService resumeService,
@@ -147,22 +154,6 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             throw new BusinessException(HttpStatus.NOT_FOUND, "简历不存在");
         }
 
-        //纯AI根据简历出题6道面试题目
-        List<InterviewQuestionVO> aiVos = aiPublish(resumeContent);
-        if (aiVos.isEmpty()) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "AI 出题失败，请稍后重试");
-        }
-        log.info("AI 根据简历生成 {} 道题目", aiVos.size());
-        //生成题号（从 1 递增）
-        List<InterviewQuestionVO> voList = IntStream.range(0, aiVos.size())
-                .mapToObj(i -> new InterviewQuestionVO(
-                        i + 1,
-                        aiVos.get(i).questionContent(),
-                        aiVos.get(i).topicSummary(),
-                        aiVos.get(i).type(),
-                        null
-                ))
-                .collect(Collectors.toList());
 
         //保存面试会话
         InterviewSession interviewSession = InterviewSession.builder()
@@ -170,34 +161,53 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .currentIndex(1)
                 .userId(userId)
                 .resumeId(resumeId)
-                .totalQuestions(voList.size())
                 .status(InterviewSession.STATUS_CREATED)
+                .generationStatus(AsyncTaskStatus.PENDING)
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
 
-        //保存面试题目
-        List<InterviewQuestion> iqs = new ArrayList<>();
-        for (InterviewQuestionVO vo : voList) {
-            InterviewQuestion iq = InterviewQuestion
-                    .builder()
-                    .sessionId(interviewSession.getSessionId())
-                    .questionIndex(vo.questionIndex())
-                    .type(vo.type())
-                    .questionContent(vo.questionContent())
-                    .topicSummary(vo.topicSummary())
-                    .build();
-            iqs.add(iq);
-        }
-        interviewQuestionMapper.insertList(iqs);
+        // 事务提交之后再投递出题任务，确保消费端能读到已提交的会话数据，避免竞态
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                sendQuestionGenTask(interviewSession.getSessionId(), userId, resumeId);
+            }
+        });
 
         //返回面试会话VO
         InterviewSessionVO interviewSessionVO = new InterviewSessionVO(
                 interviewSession.getSessionId(),
                 userId,
                 interviewSession.getCurrentIndex(),
-                interviewSession.getStatus());
+                interviewSession.getStatus(),
+                interviewSession.getGenerationStatus());
         return interviewSessionVO;
+    }
+
+    public void sendQuestionGenTask(String sessionId, Long userId, Long resumeId) {
+        sendQuestionGenTask(sessionId, userId, resumeId, 0);
+    }
+    private void sendQuestionGenTask(String sessionId, Long userId, Long resumeId, int retryCount) {
+        Map<String, String> messages = Map.of(
+                AsyncTaskConstants.FIELD_SESSION_ID, sessionId,
+                AsyncTaskConstants.FIELD_USER_ID, userId.toString(),
+                AsyncTaskConstants.FIELD_RESUME_ID, String.valueOf(resumeId),
+                AsyncTaskConstants.FIELD_RETRY_COUNT, String.valueOf(retryCount)
+        );
+        try {
+            String messageId = asyncTaskService.sendTask(INTERVIEW_QUESTION_GEN_STREAM_KEY, messages);
+            log.info("面试出题任务已发送到Stream, messageId={}", messageId);
+        } catch (Exception e) {
+            boolean updated = lambdaUpdate()
+                    .eq(InterviewSession::getSessionId, sessionId)// 保证幂等
+                    .set(InterviewSession::getGenerationStatus, AsyncTaskStatus.FAILED) // 改为失败状态
+                    .update();
+
+            if (!updated) {
+                log.warn("入队失败后更新状态失败，可能任务已被覆盖或删除, sessionId={}", sessionId);
+            }
+        }
     }
 
 
@@ -293,7 +303,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionId(),
                 userId,
                 interviewSession.getCurrentIndex(),
-                interviewSession.getStatus()
+                interviewSession.getStatus(),
+                AsyncTaskStatus.COMPLETED
         );
         return interviewSessionVO;
     }
@@ -393,6 +404,117 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 ),
                 this::processMessage
         );
+
+        this.questionGenConsumerName = INTERVIEW_QUESTION_GEN_CONSUMER_PREFIX
+                + UUID.randomUUID().toString().substring(0, 8);
+        asyncTaskService.registerConsumer(
+                new ConsumerConfig(
+                        INTERVIEW_QUESTION_GEN_STREAM_KEY,
+                        INTERVIEW_QUESTION_GEN_GROUP_NAME,
+                        questionGenConsumerName,
+                        questionGenThreadName,
+                        BATCH_SIZE,
+                        POLL_INTERVAL_MS,
+                        PENDING_IDLE_TIMEOUT_MS,
+                        PENDING_CLAIM_BATCH_SIZE
+                ),
+                this::processQuestionGenMessage
+        );
+    }
+
+    private void processQuestionGenMessage(StreamMessageId messageId, Map<String, String> data) {
+        String sessionId = data.get(FIELD_SESSION_ID);
+        String userIdStr = data.get(FIELD_USER_ID);
+        String resumeIdStr = data.get(FIELD_RESUME_ID);
+        String retryCountStr = data.get(FIELD_RETRY_COUNT);
+        if (sessionId == null || userIdStr == null || resumeIdStr == null) {
+            log.warn("面试出题消息格式错误，丢弃: messageId={}", messageId);
+            asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
+            return;
+        }
+        Long userId = Long.parseLong(userIdStr);
+        Long resumeId = Long.parseLong(resumeIdStr);
+        try {
+            InterviewSession session = baseMapper.selectById(sessionId);
+            if (session == null) {
+                log.warn("面试会话不存在，丢弃: messageId={}", messageId);
+                asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
+                return;
+            }
+            if (!userId.equals(session.getUserId())) {
+                log.warn("面试出题消息归属不匹配，丢弃: messageId={}", messageId);
+                asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
+                return;
+            }
+            // 幂等：仅处理未生成题目的会话
+            if (AsyncTaskStatus.COMPLETED.equals(session.getGenerationStatus())) {
+                log.info("题目已生成，跳过重复消息: sessionId={}", sessionId);
+                asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
+                return;
+            }
+
+            // 置为处理中
+            updateGenerationStatus(sessionId, AsyncTaskStatus.PROCESSING);
+
+            // AI 出题
+            String resumeContent = fetchResumeContent(resumeId);
+            if (resumeContent.isEmpty()) {
+                throw new BusinessException(HttpStatus.NOT_FOUND, "简历内容为空");
+            }
+            List<InterviewQuestionVO> aiVos = aiPublish(resumeContent);
+            if (aiVos == null || aiVos.isEmpty()) {
+                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "AI 出题结果为空");
+            }
+
+            // 落库题目
+            List<InterviewQuestion> iqs = new ArrayList<>();
+            for (InterviewQuestionVO vo : aiVos) {
+                iqs.add(InterviewQuestion.builder()
+                        .sessionId(sessionId)
+                        .questionIndex(vo.questionIndex())
+                        .type(vo.type())
+                        .questionContent(vo.questionContent())
+                        .topicSummary(vo.topicSummary())
+                        .build());
+            }
+            interviewQuestionMapper.insertList(iqs);
+
+            // 更新会话：题目数量 + 出题完成
+            InterviewSession update = InterviewSession.builder()
+                    .sessionId(sessionId)
+                    .totalQuestions(iqs.size())
+                    .generationStatus(AsyncTaskStatus.COMPLETED)
+                    .build();
+            baseMapper.updateById(update);
+
+            asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
+        } catch (Exception e) {
+            try {
+                log.error("面试出题失败，sessionId={}", sessionId, e);
+                int retryCount;
+                try {
+                    retryCount = retryCountStr == null ? 0 : Integer.parseInt(retryCountStr);
+                } catch (NumberFormatException nfe) {
+                    log.warn("非法 retryCount，按已达上限处理: retryCountStr={}", retryCountStr, nfe);
+                    retryCount = MAX_RETRY_COUNT;
+                }
+                if (retryCount >= MAX_RETRY_COUNT) {
+                    updateGenerationStatus(sessionId, AsyncTaskStatus.FAILED);
+                } else {
+                    sendQuestionGenTask(sessionId, userId, resumeId, retryCount + 1);
+                }
+            } finally {
+                asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
+            }
+        }
+    }
+
+    private void updateGenerationStatus(String sessionId, AsyncTaskStatus status) {
+        InterviewSession update = InterviewSession.builder()
+                .sessionId(sessionId)
+                .generationStatus(status)
+                .build();
+        baseMapper.updateById(update);
     }
 
     private void processMessage(StreamMessageId messageId, Map<String, String> data) {
@@ -589,7 +711,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 session.getSessionId(),
                 session.getUserId(),
                 session.getCurrentIndex(),
-                session.getStatus());
+                session.getStatus(),
+                session.getGenerationStatus());
     }
 
     @Transactional(rollbackFor = Exception.class)
