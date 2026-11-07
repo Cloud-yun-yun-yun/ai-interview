@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yun.aiinterview.mapper.InterviewQuestionMapper">
+
+    <insert id="saveList">
+        INSERT INTO interview_question
+        (kb_id, session_id, question_index, question_content, topic_summary, type)
+        VALUES
+        <foreach collection="list" item="q" separator=",">
+            (#{q.kbId}, #{q.sessionId}, #{q.questionIndex}, #{q.questionContent}, #{q.topicSummary}, #{q.type})
+        </foreach>
+    </insert>
+
+</mapper>

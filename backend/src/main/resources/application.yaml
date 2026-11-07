@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: ai-interview
+  datasource:
+    url: jdbc:postgresql://localhost:5433/interview
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6380
+
+  ai:
+    openai:
+      api-key: sk-ws-H.PMMYIIP.tjtk.MEYCIQD62POBJr9t7DsUeTRLHkTHKgzSEAtyhnW9AMxo7-QDTAIhAKWAe2K5-pEIGppa2SsLDWGBnNkTbb7rLDeEbN6To6Uz
+      base-url: https://ws-snlscsj5heo4kuyy.cn-beijing.maas.aliyuncs.com/compatible-mode
+      chat:
+        options:
+          model: qwen3.8-flash
+          temperature: 0.8
+      embedding:
+        options:
+          model: qwen3.7-text-embedding-flash
+          dimensions: 1024
+    #向量数据库
+    vectorstore:
+      pgvector:
+        dimensions: 1024
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        initialize-schema: false
+    # JDBC 聊天记忆自动建表（PostgreSQL 需用 never）
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: never
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+#minio配置
+minio:
+  storage:
+    endpoint: http://localhost:9000
+    access-key: dHDCFdHljLTeDjT33nEb
+    secret-key: cy4Q0eXmCGn4xgvMh5wzYnFWmGHD7VgKV5YylEbV
+    bucket: ai-interview
+    region: us-east-1
+    auto-create-bucket: false
