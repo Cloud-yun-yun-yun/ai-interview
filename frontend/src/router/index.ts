@@ -109,9 +109,9 @@ const router = createRouter({
           }
         },
         {
-          path: 'record/detail/:sessionId',
-          name: 'recordDetail',
-          component: () => import('@/views/recordDetail.vue'),
+          path: 'record/evaluate/:sessionId',
+          name: 'evaluate',
+          component: () => import('@/views/evaluate.vue'),
           meta: {
             title: '面试记录详情',
             icon: 'DocumentDetail'

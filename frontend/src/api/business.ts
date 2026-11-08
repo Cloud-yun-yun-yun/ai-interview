@@ -100,8 +100,11 @@ export interface InterviewSessionVO {
     sessionId: string;
     userId: number;
     currentIndex: number;
-    status: InterviewSessionStatus;
-    generationStatus: AsyncTaskStatus
+    sessionStatus: InterviewSessionStatus;
+    sessionQuestionGenStatus: AsyncTaskStatus;
+    sessionEvaluateStatus: AsyncTaskStatus;
+    createTime: string;
+    sessionName: string;
 }
 
 export interface CreateInterviewSessionDTO {

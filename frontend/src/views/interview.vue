@@ -133,7 +133,7 @@ const startPolling = (sessionId: string) => {
   pollingTimer = setInterval(async () => {
     try {
       const session = await getSession(sessionId) as InterviewSessionVO | null
-      const status = session?.generationStatus as AsyncTaskStatus | undefined
+      const status = session?.sessionQuestionGenStatus as AsyncTaskStatus | undefined
       if (status === 'COMPLETED') {
         stopPolling()
         localStorage.setItem(CURRENT_SESSION_KEY, sessionId)

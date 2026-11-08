@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @Data
 @TableName(value = "interview_session", autoResultMap = true)
@@ -40,8 +41,8 @@ public class InterviewSession {
     private Integer currentIndex;
 
     /** 状态：CREATED / COMPLETED */
-    @TableField("status")
-    private String status;
+    @TableField("session_status")
+    private String sessionStatus;
 
     @TableField("total_questions")
     private Integer totalQuestions;
@@ -64,10 +65,18 @@ public class InterviewSession {
     @TableField("request_id")
     private String requestId;
 
-    @TableField("generation_status")
-    private AsyncTaskStatus generationStatus;
+    @TableField("session_questiongen_status")
+    private AsyncTaskStatus sessionQuestionGenStatus;
 
     /** 异步任务状态 */
-    @TableField("async_task_status")
-    private AsyncTaskStatus asyncTaskStatus;
+    @TableField("session_evaluate_status")
+    private AsyncTaskStatus sessionEvaluateStatus;
+
+    /** 会话创建时间（精确到日） */
+    @TableField("create_time")
+    private LocalDate createTime;
+
+    /** 会话名称（素材名+面试） */
+    @TableField("session_name")
+    private String sessionName;
 }

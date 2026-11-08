@@ -30,7 +30,7 @@ public class InterviewController {
         Long userId = BaseContext.getCurrentId();
         return Result.success(interviewService.createInterview(dto, userId));
     }
-    //todo 给session增加name字段
+    //todo 给session增加时间字段
     @PostMapping("/session/create/kb")
     public Result<InterviewSessionVO> createInterview(@RequestBody CreateKbInterviewSessionDTO dto) {
         Long userId = BaseContext.getCurrentId();

@@ -9,10 +9,41 @@ const router = useRouter()
 
 const sessions = ref<InterviewSessionVO[]>([])
 const loading = ref(true)
+const POLL_INTERVAL = 3000;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
 onMounted(async () => {
   await loadSessions()
+  checkTask()
 })
+//停止轮询
+const stopPolling = ()=>{
+  if(pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+}
+const checkTask = ()=>{
+  stopPolling()
+  pollTimer = setTimeout(async ()=>{
+    try{
+      const res = await getSessionList()
+      console.log(res)
+      sessions.value = res
+      const hasEvaluating = res.some((item) => item.status === 'EVALUATING');
+      if(hasEvaluating) {
+        checkTask()
+      }
+      else {
+        stopPolling()
+      }
+    }catch(error) {
+      console.error('轮询检查任务失败:', error)
+      ElMessage.error('轮询检查任务失败，请稍后重试')
+      stopPolling()
+    }
+   }, POLL_INTERVAL)
+}
 
 const loadSessions = async () => {
   loading.value = true
@@ -27,21 +58,21 @@ const loadSessions = async () => {
   }
 }
 
-const isInProgress = (s: InterviewSessionVO) => s.status === 'CREATED'
+const isInProgress = (s: InterviewSessionVO) => s.sessionStatus === 'CREATED'
 
 const handleContinue = (s: InterviewSessionVO) => {
   router.push(`/backend/interview/exam/${s.sessionId}`)
 }
 
 const handleRowClick = (s: InterviewSessionVO) => {
-  router.push(`/backend/record/detail/${s.sessionId}`)
+  router.push(`/backend/record/evaluate/${s.sessionId}`)
 }
 
 const statusTag = (s: InterviewSessionVO) => {
-  if (s.status === 'CREATED') return { type: 'primary' as const, text: '进行中' }
-  if (s.status === 'SUBMITTED') return { type: 'warning' as const, text: '评估中' }
-  if (s.status === 'EVALUATED') return { type: 'success' as const, text: '已完成' }
-  return { type: 'info' as const, text: s.status }
+  if (s.sessionStatus === 'CREATED') return { type: 'primary' as const, text: '进行中' }
+  if (s.sessionStatus === 'SUBMITTED') return { type: 'warning' as const, text: '评估中' }
+  if (s.sessionStatus === 'EVALUATED') return { type: 'success' as const, text: '已完成' }
+  return { type: 'info' as const, text: s.sessionStatus }
 }
 </script>
 
@@ -74,9 +105,14 @@ const statusTag = (s: InterviewSessionVO) => {
         empty-text="暂无面试记录"
         @row-click="handleRowClick"
     >
-      <el-table-column label="会话编号" prop="sessionId" min-width="220" show-overflow-tooltip>
+      <el-table-column label="名称" prop="sessionName" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">
-          <span>{{ row.sessionId }}</span>
+          <span>{{ row.sessionName }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" prop="createTime" min-width="120" align="center">
+        <template #default="{ row }">
+          <span>{{ row.createTime }}</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" min-width="100" align="center">

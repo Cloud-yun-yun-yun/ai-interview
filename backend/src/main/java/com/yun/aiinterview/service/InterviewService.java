@@ -33,6 +33,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -144,7 +145,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         Long activeCount = lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
                 .eq(InterviewSession::getResumeId, resumeId)
-                .eq(InterviewSession::getStatus, InterviewSession.STATUS_CREATED)
+                .eq(InterviewSession::getSessionStatus, InterviewSession.STATUS_CREATED)
                 .count();
         if (activeCount != null && activeCount > 0) {
             throw new BusinessException(HttpStatus.CONFLICT, "该简历已有进行中的面试,请先提交后再重新创建");
@@ -153,14 +154,17 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         if (resumeContent.isEmpty()) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "简历不存在");
         }
+        String sessionName = resolveSessionName(resolveResumeName(resumeId));
         //保存面试会话
         InterviewSession interviewSession = InterviewSession.builder()
                 .sessionId(UUID.randomUUID().toString())
                 .currentIndex(1)
                 .userId(userId)
                 .resumeId(resumeId)
-                .status(InterviewSession.STATUS_CREATED)
-                .generationStatus(AsyncTaskStatus.PENDING)
+                .sessionStatus(InterviewSession.STATUS_CREATED)
+                .sessionQuestionGenStatus(AsyncTaskStatus.PENDING)
+                .sessionName(sessionName)
+                .createTime(LocalDate.now())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -178,8 +182,11 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionId(),
                 userId,
                 interviewSession.getCurrentIndex(),
-                interviewSession.getStatus(),
-                interviewSession.getGenerationStatus());
+                interviewSession.getSessionStatus(),
+                interviewSession.getSessionEvaluateStatus(),
+                interviewSession.getSessionQuestionGenStatus(),
+                interviewSession.getCreateTime().toString(),
+                interviewSession.getSessionName());
         return interviewSessionVO;
     }
 
@@ -199,7 +206,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         } catch (Exception e) {
             boolean updated = lambdaUpdate()
                     .eq(InterviewSession::getSessionId, sessionId)// 保证幂等
-                    .set(InterviewSession::getGenerationStatus, AsyncTaskStatus.FAILED) // 改为失败状态
+                    .set(InterviewSession::getSessionQuestionGenStatus, AsyncTaskStatus.FAILED) // 改为失败状态
                     .update();
 
             if (!updated) {
@@ -242,7 +249,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         Long activeCount = lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
                 .eq(InterviewSession::getKbId, kbId)
-                .eq(InterviewSession::getStatus, InterviewSession.STATUS_CREATED)
+                .eq(InterviewSession::getSessionStatus, InterviewSession.STATUS_CREATED)
                 .count();
         if (activeCount != null && activeCount > 0) {
             throw new BusinessException(HttpStatus.CONFLICT, "该知识库已有进行中的面试,请先提交后再重新创建");
@@ -270,6 +277,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 ))
                 .collect(Collectors.toList());
         // 保存面试会话
+        String sessionName = resolveSessionName(kb.getName());
         InterviewSession interviewSession = InterviewSession
                 .builder()
                 .sessionId(UUID.randomUUID().toString())
@@ -278,8 +286,10 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .resumeId(null)
                 .totalQuestions(voList.size())
                 .kbId(kbId)
-                .status(InterviewSession.STATUS_CREATED)
-                .generationStatus(AsyncTaskStatus.COMPLETED)
+                .sessionStatus(InterviewSession.STATUS_CREATED)
+                .sessionQuestionGenStatus(AsyncTaskStatus.COMPLETED)
+                .sessionName(sessionName)
+                .createTime(LocalDate.now())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -302,8 +312,11 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionId(),
                 userId,
                 interviewSession.getCurrentIndex(),
-                interviewSession.getStatus(),
-                AsyncTaskStatus.COMPLETED
+                interviewSession.getSessionStatus(),
+                interviewSession.getSessionEvaluateStatus(),
+                AsyncTaskStatus.COMPLETED,
+                interviewSession.getCreateTime().toString(),
+                interviewSession.getSessionName()
         );
         return interviewSessionVO;
     }
@@ -317,7 +330,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         if(interviewSession == null){
             throw new BusinessException(HttpStatus.NOT_FOUND, "面试会话不存在");
         }
-        if (!InterviewSession.STATUS_CREATED.equals(interviewSession.getStatus())) {
+        if (!InterviewSession.STATUS_CREATED.equals(interviewSession.getSessionStatus())) {
             throw new BusinessException(HttpStatus.CONFLICT, "不可重复提交");
         }
         if (!interviewSession.getCurrentIndex().equals(qa.currentIndex())) {
@@ -343,8 +356,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
 
         // 2. 推进会话状态 / 进度
         if (isLast) {
-            interviewSession.setStatus(InterviewSession.STATUS_SUBMITTED);
-            interviewSession.setAsyncTaskStatus(AsyncTaskStatus.PENDING);
+            interviewSession.setSessionStatus(InterviewSession.STATUS_SUBMITTED);
+            interviewSession.setSessionEvaluateStatus(AsyncTaskStatus.PENDING);
         } else {
             interviewSession.setCurrentIndex(qa.currentIndex() + 1);
         }
@@ -365,8 +378,11 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionId(),
                 interviewSession.getUserId(),
                 interviewSession.getCurrentIndex(),
-                interviewSession.getStatus(),
-                interviewSession.getGenerationStatus()
+                interviewSession.getSessionStatus(),
+                interviewSession.getSessionEvaluateStatus(),
+                interviewSession.getSessionQuestionGenStatus(),
+                interviewSession.getCreateTime() == null ? null : interviewSession.getCreateTime().toString(),
+                interviewSession.getSessionName()
         );
     }
 
@@ -385,7 +401,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         } catch (Exception e) {
             boolean updated = lambdaUpdate()
                     .eq(InterviewSession::getSessionId, sessionId)// 保证幂等
-                    .set(InterviewSession::getAsyncTaskStatus, AsyncTaskStatus.FAILED) // 改为失败状态
+                    .set(InterviewSession::getSessionEvaluateStatus, AsyncTaskStatus.FAILED) // 改为失败状态
                     .update();
 
             if (!updated) {
@@ -454,7 +470,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 return;
             }
             // 幂等：仅处理未生成题目的会话
-            if (AsyncTaskStatus.COMPLETED.equals(session.getGenerationStatus())) {
+            if (AsyncTaskStatus.COMPLETED.equals(session.getSessionQuestionGenStatus())) {
                 log.info("题目已生成，跳过重复消息: sessionId={}", sessionId);
                 asyncTaskService.ackMessage(INTERVIEW_QUESTION_GEN_STREAM_KEY, INTERVIEW_QUESTION_GEN_GROUP_NAME, messageId);
                 return;
@@ -490,7 +506,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             InterviewSession update = InterviewSession.builder()
                     .sessionId(sessionId)
                     .totalQuestions(iqs.size())
-                    .generationStatus(AsyncTaskStatus.COMPLETED)
+                    .sessionQuestionGenStatus(AsyncTaskStatus.COMPLETED)
                     .build();
             baseMapper.updateById(update);
 
@@ -519,7 +535,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
     private void updateGenerationStatus(String sessionId, AsyncTaskStatus status) {
         InterviewSession update = InterviewSession.builder()
                 .sessionId(sessionId)
-                .generationStatus(status)
+                .sessionQuestionGenStatus(status)
                 .build();
         baseMapper.updateById(update);
     }
@@ -547,8 +563,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 return;
             }
             // 幂等：仅处理已提交未评估的会话
-            if (!InterviewSession.STATUS_SUBMITTED.equals(session.getStatus())) {
-                log.info("会话状态非 SUBMITTED，可能已评估，跳过: sessionId={}, status={}", sessionId, session.getStatus());
+            if (!InterviewSession.STATUS_SUBMITTED.equals(session.getSessionStatus())) {
+                log.info("会话状态非 SUBMITTED，可能已评估，跳过: sessionId={}, status={}", sessionId, session.getSessionStatus());
                 asyncTaskService.ackMessage(INTERVIEW_EVALUATION_STREAM_KEY, INTERVIEW_EVALUATION_GROUP_NAME, messageId);
                 return;
             }
@@ -562,10 +578,10 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             // 写回会话：状态改为已评估，记录总分与反馈
             InterviewSession update = InterviewSession.builder()
                     .sessionId(session.getSessionId())
-                    .status(InterviewSession.STATUS_EVALUATED)
+                    .sessionStatus(InterviewSession.STATUS_EVALUATED)
                     .totalScore(response.overallScore())
                     .feedback(response.feedback())
-                    .asyncTaskStatus(AsyncTaskStatus.COMPLETED)
+                    .sessionEvaluateStatus(AsyncTaskStatus.COMPLETED)
                     .build();
             baseMapper.updateById(update);
 
@@ -596,7 +612,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
     private void updateAsyncTaskStatus(String sessionId, AsyncTaskStatus status) {
         InterviewSession update = InterviewSession.builder()
                 .sessionId(sessionId)
-                .asyncTaskStatus(status)
+                .sessionEvaluateStatus(status)
                 .build();
         baseMapper.updateById(update);
     }
@@ -682,8 +698,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         if (session == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "面试会话不存在");
         }
-        AsyncTaskStatus status = session.getAsyncTaskStatus() == null
-                ? AsyncTaskStatus.PENDING : session.getAsyncTaskStatus();
+        AsyncTaskStatus status = session.getSessionEvaluateStatus() == null
+                ? AsyncTaskStatus.PENDING : session.getSessionEvaluateStatus();
 
         boolean done = AsyncTaskStatus.COMPLETED.equals(status);
         return new InterviewEvaluationVO(
@@ -704,8 +720,11 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 session.getSessionId(),
                 session.getUserId(),
                 session.getCurrentIndex(),
-                session.getStatus(),
-                session.getGenerationStatus());
+                session.getSessionStatus(),
+                session.getSessionQuestionGenStatus(),
+                session.getSessionEvaluateStatus(),
+                session.getCreateTime() == null ? null : session.getCreateTime().toString(),
+                session.getSessionName());
     }
 
     public List<InterviewSessionVO> listSessions(Long userId) {
@@ -718,15 +737,18 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                         s.getSessionId(),
                         s.getUserId(),
                         s.getCurrentIndex(),
-                        s.getStatus(),
-                        s.getGenerationStatus()))
+                        s.getSessionStatus(),
+                        s.getSessionQuestionGenStatus(),
+                        s.getSessionEvaluateStatus(),
+                        s.getCreateTime() == null ? null : s.getCreateTime().toString(),
+                        s.getSessionName()))
                 .toList();
     }
 
     public String findActiveSessionId(Long userId) {
         InterviewSession session = lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
-                .eq(InterviewSession::getStatus, InterviewSession.STATUS_CREATED)
+                .eq(InterviewSession::getSessionStatus, InterviewSession.STATUS_CREATED)
                 .orderByDesc(InterviewSession::getSessionId)
                 .last("limit 1")
                 .one();
@@ -787,6 +809,22 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .last("limit 1")
                 .one();
         return resume != null && resume.getContent() != null ? resume.getContent() : "";
+    }
+
+    /** 根据素材名称生成会话名称，名称为空时返回"未命名面试" */
+    private String resolveSessionName(String baseName) {
+        return (baseName == null || baseName.isBlank()) ? "未命名面试" : baseName + "面试";
+    }
+
+    /** 查询简历名称 */
+    private String resolveResumeName(Long resumeId) {
+        if (resumeId == null) {
+            return null;
+        }
+        Resume resume = resumeService.lambdaQuery()
+                .eq(Resume::getId, resumeId)
+                .one();
+        return resume == null ? null : resume.getName();
     }
 
     public record InterviewQuestionResponse(List<InterviewQuestionVO> questions) {}

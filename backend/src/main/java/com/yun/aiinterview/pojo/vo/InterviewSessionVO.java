@@ -4,7 +4,10 @@ public record InterviewSessionVO(
         String sessionId,
         Long userId,
         Integer currentIndex,
-        String status,
-        AsyncTaskStatus generationStatus
+        String sessionStatus,
+        AsyncTaskStatus sessionEvaluateStatus,
+        AsyncTaskStatus sessionQuestionGenStatus,
+        String createTime,
+        String sessionName
 ) {
 }

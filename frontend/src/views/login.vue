@@ -25,10 +25,7 @@ const handleLogin = async ()=>{
     return
   }else{
     console.log(result)
-    localStorage.setItem('token',String(result.token))
-    if (result.activeSessionId) {
-      localStorage.setItem('currentInterviewSessionId', String(result.activeSessionId))
-    }
+    localStorage.setItem('token',String(result))
   }
   ElMessage.success('登录成功')
   const redirect = route.query.redirect as string

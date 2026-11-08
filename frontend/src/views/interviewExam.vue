@@ -1,109 +1,92 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Monitor, Promotion, User } from "@element-plus/icons-vue"
-import {
-  getSession,
-  getSessionQuestions,
-  submitAnswer,
-  type InterviewSessionVO,
-  type InterviewQuestionVO
-} from "@/api/business"
-import { ElMessage } from "element-plus"
-//todo 重构页面布局，改善面试题目展示方式
+import {computed, onMounted, ref, nextTick} from "vue";
+import  {getSession, getSessionQuestions, submitAnswer,
+  type InterviewQuestionVO, type InterviewSessionVO, type QuestionAnswer} from "@/api/business.ts";
+import {Monitor, Promotion, User} from "@element-plus/icons-vue";
+import { useRoute , useRouter} from 'vue-router'
+import {ElMessage} from "element-plus";
+
 const route = useRoute()
 const router = useRouter()
 
-const sessionId = String(route.params.sessionId || '')
-
-const session = ref<InterviewSessionVO | null>(null)
+const currentQuestions = ref<InterviewQuestionVO[]>([])
 const questions = ref<InterviewQuestionVO[]>([])
-const loading = ref(true)
+const session = ref<InterviewSessionVO>()
 const submitting = ref(false)
-const currentIndex = ref(0)
-const answerText = ref('')
-
-const currentQuestion = computed<InterviewQuestionVO | null>(() => {
-  return questions.value.find(q => q.questionIndex === currentIndex.value) || null
-})
-
+const currentIndex = ref<number>()
+const answerText = ref()
+const sessionId = route.params.sessionId
+const chatScrollRef = ref<HTMLElement | null>(null)
+//动态获取进度条
 const progressPercent = computed(() => {
   if (questions.value.length === 0) return 0
   return Math.round((currentIndex.value / questions.value.length) * 100)
 })
-
-onMounted(async () => {
-  if (!sessionId) {
-    ElMessage.error('缺少面试会话参数')
-    loading.value = false
-    return
+//滚动至底部的方法
+const scrollToBottom = async ()=>{
+  // 等待 DOM 更新完毕
+  await nextTick()
+  if (chatScrollRef.value){
+    chatScrollRef.value.scrollTop = chatScrollRef.value.scrollHeight
   }
-  try {
-    const [sessionRes, questionsRes] = await Promise.all([
-      getSession(sessionId) as Promise<InterviewSessionVO | null>,
-      getSessionQuestions(sessionId) as Promise<InterviewQuestionVO[] | null>
-    ])
-    session.value = sessionRes
-    questions.value = questionsRes || []
-    if (sessionRes) {
-      currentIndex.value = sessionRes.currentIndex || 0
-    }
-    // 回显当前题目已存的答案（历史题目，重进时可见）
-    answerText.value = currentQuestion.value?.userAnswer || ''
-  } catch (error) {
-    console.error('加载面试数据失败:', error)
-    ElMessage.error('加载面试失败，请稍后重试')
-  } finally {
-    loading.value = false
+}
+onMounted(async()=>{
+  session.value = await getSession(sessionId as any)
+  if (session.value) {
+    currentIndex.value = session.value.currentIndex || 0
+  }
+  questions.value = await getSessionQuestions(sessionId as any)
+  if (questions.value.length > 0) {
+    currentQuestions.value = questions.value.filter(
+        (q) => q.questionIndex <= currentIndex.value
+    )
+    scrollToBottom()
   }
 })
 
-const handleSubmit = async () => {
-  const q = currentQuestion.value
-  if (!q || !sessionId) return
-  if (!answerText.value || answerText.value.trim() === '') {
-    ElMessage.warning('请先填写回答内容')
-    return
+const handleSubmit = async ()=>{
+  if (!answerText.value.trim()) return;
+  submitting.value = true;
+  const payload: QuestionAnswer = {
+    sessionId: sessionId as string,
+    answer: answerText.value,
+    currentIndex: currentIndex.value
   }
-  submitting.value = true
-  try {
-    const vo = await submitAnswer({
-      sessionId,
-      answer: answerText.value,
-      currentIndex: currentIndex.value
-    }) as InterviewSessionVO | null
-    if (vo) {
-      session.value = vo
-      if (vo.status !== 'CREATED') {
-        ElMessage.success('面试已提交，正在生成评估...')
-        router.push(`/backend/record`)
-        return
-      }
-      currentIndex.value = vo.currentIndex
-      answerText.value = ''
-      ElMessage.success('回答已提交，进入下一题')
+  // 发送请求
+  try{
+    session.value = await submitAnswer(payload)
+    if(session.value.sessionStatus === 'SUBMITTED'){
+      ElMessage.success("提交成功，准备评估")
+      //todo 跳转进入评估页面
+      router.push({
+        name: 'evaluate',
+        params: {
+          sessionId: String(sessionId)
+        }
+      })
+      return
     }
-  } catch (error: any) {
-    const errMsg = error?.response?.data?.message || error?.message || '提交失败'
-    ElMessage.error(errMsg)
+    const nextIdx = session.value.currentIndex;
+    currentQuestions.value[currentQuestions.value.length - 1].userAnswer = answerText.value;
+    answerText.value = '';
+    scrollToBottom()
+    const nextQuestion = questions.value.find((q) => q.questionIndex === nextIdx)
+    setTimeout(()=>{
+      currentIndex.value = nextIdx;
+      currentQuestions.value.push(nextQuestion);
+      scrollToBottom();
+    },500)
+  }catch(error){
+    ElMessage.warning("没有下一题了");
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
+
 }
 </script>
 
 <template>
-  <div v-if="loading" class="exam-container">
-    <div class="exam-header">
-      <div class="header-title">
-        <div class="title-icon"><el-icon><Monitor/></el-icon></div>
-        <span class="title-text">模拟面试</span>
-      </div>
-      <span>正在加载面试数据...</span>
-    </div>
-  </div>
-
-  <div v-else-if="!currentQuestion" class="exam-container">
+  <div v-if="!currentQuestions.length" class="exam-container">
     <div class="exam-header">
       <div class="header-title">
         <div class="title-icon"><el-icon><Monitor/></el-icon></div>
@@ -133,20 +116,24 @@ const handleSubmit = async () => {
     </div>
 
     <div class="exam-content">
-      <div class="content-question">
-        <div class="in-content">
-          <div class="normal-image"><el-icon><User /></el-icon></div>
-          <div class="in-message">
-            <div class="message-header">
-              <span>面试官</span>
-              <el-tag v-if="currentQuestion.topicSummary">{{ currentQuestion.topicSummary }}</el-tag>
+      <div class="content-question" ref="chatScrollRef">
+        <div class="question-item"
+             v-for="currentQuestion in currentQuestions"
+             :key="currentQuestion.questionIndex">
+          <div class="in-content">
+            <div class="normal-image"><el-icon><User /></el-icon></div>
+            <div class="in-message">
+              <div class="message-header">
+                <span>面试官</span>
+                <el-tag v-if="currentQuestion.topicSummary">{{ currentQuestion.topicSummary }}</el-tag>
+              </div>
+              <span class="in-message-content">{{ currentQuestion.questionContent }}</span>
             </div>
-            <span class="in-message-content">{{ currentQuestion.questionContent }}</span>
           </div>
-        </div>
-        <div v-if="currentQuestion.userAnswer" class="user-content">
-          <span class="user-message-content">{{ currentQuestion.userAnswer }}</span>
-          <div class="normal-image"><el-icon><User /></el-icon></div>
+          <div v-if="currentQuestion.userAnswer" class="user-content">
+            <span class="user-message-content">{{ currentQuestion.userAnswer }}</span>
+            <div class="normal-image"><el-icon><User /></el-icon></div>
+          </div>
         </div>
       </div>
 
@@ -238,6 +225,11 @@ const handleSubmit = async () => {
   height: 100%;
   box-sizing: border-box;
   padding: 20px;
+}
+.question-item{
+  display: flex;
+  flex-direction: column;
+  gap:15px;
 }
 .in-content{
   display: flex;
