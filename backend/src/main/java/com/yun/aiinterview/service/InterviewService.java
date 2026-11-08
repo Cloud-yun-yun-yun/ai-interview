@@ -34,6 +34,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -164,7 +165,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .sessionStatus(InterviewSession.STATUS_CREATED)
                 .sessionQuestionGenStatus(AsyncTaskStatus.PENDING)
                 .sessionName(sessionName)
-                .createTime(LocalDate.now())
+                .createTime(LocalDateTime.now().toString())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -289,7 +290,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .sessionStatus(InterviewSession.STATUS_CREATED)
                 .sessionQuestionGenStatus(AsyncTaskStatus.COMPLETED)
                 .sessionName(sessionName)
-                .createTime(LocalDate.now())
+                .createTime(LocalDateTime.now().toString())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
