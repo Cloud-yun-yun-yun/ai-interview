@@ -352,7 +352,7 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
         Long unfinishedCount = interviewSessionMapper.selectCount(
                 new LambdaQueryWrapper<InterviewSession>()
                         .eq(InterviewSession::getResumeId, resumeId)
-                        .eq(InterviewSession::getStatus, InterviewSession.STATUS_CREATED));
+                        .eq(InterviewSession::getSessionStatus, InterviewSession.STATUS_CREATED));
         if (unfinishedCount != null && unfinishedCount > 0) {
             throw new BusinessException(HttpStatus.BAD_REQUEST,
                     "该简历存在进行中的面试，请完成考试后再删除");

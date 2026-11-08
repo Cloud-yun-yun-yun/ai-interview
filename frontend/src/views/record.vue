@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { getSessionList, type InterviewSessionVO } from "@/api/business"
 import { ElMessage } from "element-plus"
 import { Monitor, VideoPlay, CircleCheck } from "@element-plus/icons-vue"
-//todo 增加轮询获得最新评估状态
 const router = useRouter()
 
 const sessions = ref<InterviewSessionVO[]>([])

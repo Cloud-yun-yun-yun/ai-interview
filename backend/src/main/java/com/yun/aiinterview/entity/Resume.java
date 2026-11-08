@@ -8,8 +8,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
 
-import java.time.LocalDateTime;
-
 /**
  * 简历主表
  */
