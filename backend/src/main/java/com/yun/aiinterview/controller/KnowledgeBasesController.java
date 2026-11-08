@@ -4,6 +4,7 @@ package com.yun.aiinterview.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.yun.aiinterview.entity.KnowledgeBase;
+import com.yun.aiinterview.pojo.vo.KnowledgeBaseQuestionVO;
 import com.yun.aiinterview.pojo.vo.KnowledgeBaseVO;
 import com.yun.aiinterview.pojo.vo.QuestionGenStatusVO;
 import com.yun.aiinterview.result.Result;
@@ -37,6 +38,11 @@ public class KnowledgeBasesController {
     @GetMapping("/list")
     public Result<List<KnowledgeBaseVO>> listKnowledgeBases() {
         return Result.success(knowledgeBaseService.listKnowledgeBases());
+    }
+
+    @GetMapping("/question")
+    public Result<List<KnowledgeBaseQuestionVO>> listQuestions(@RequestParam Long kbId) {
+        return Result.success(knowledgeBaseService.listQuestions(kbId));
     }
 
     @DeleteMapping("/{id}")

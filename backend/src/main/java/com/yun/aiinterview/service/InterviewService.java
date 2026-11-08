@@ -187,7 +187,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionEvaluateStatus(),
                 interviewSession.getSessionQuestionGenStatus(),
                 interviewSession.getCreateTime().toString(),
-                interviewSession.getSessionName());
+                interviewSession.getSessionName(),
+                toScoreString(interviewSession.getTotalScore()),
+                interviewSession.getFeedback());
         return interviewSessionVO;
     }
 
@@ -317,7 +319,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionEvaluateStatus(),
                 AsyncTaskStatus.COMPLETED,
                 interviewSession.getCreateTime().toString(),
-                interviewSession.getSessionName()
+                interviewSession.getSessionName(),
+                toScoreString(interviewSession.getTotalScore()),
+                interviewSession.getFeedback()
         );
         return interviewSessionVO;
     }
@@ -383,7 +387,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionEvaluateStatus(),
                 interviewSession.getSessionQuestionGenStatus(),
                 interviewSession.getCreateTime() == null ? null : interviewSession.getCreateTime().toString(),
-                interviewSession.getSessionName()
+                interviewSession.getSessionName(),
+                toScoreString(interviewSession.getTotalScore()),
+                interviewSession.getFeedback()
         );
     }
 
@@ -711,6 +717,10 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         );
     }
 
+    private String toScoreString(Integer score) {
+        return score == null ? null : String.valueOf(score);
+    }
+
     public InterviewSessionVO getSession(String sessionId, Long userId){
         InterviewSession session = lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
@@ -725,7 +735,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 session.getSessionQuestionGenStatus(),
                 session.getSessionEvaluateStatus(),
                 session.getCreateTime() == null ? null : session.getCreateTime().toString(),
-                session.getSessionName());
+                session.getSessionName(),
+                toScoreString(session.getTotalScore()),
+                session.getFeedback());
     }
 
     public List<InterviewSessionVO> listSessions(Long userId) {
@@ -742,7 +754,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                         s.getSessionQuestionGenStatus(),
                         s.getSessionEvaluateStatus(),
                         s.getCreateTime() == null ? null : s.getCreateTime().toString(),
-                        s.getSessionName()))
+                        s.getSessionName(),
+                        toScoreString(s.getTotalScore()),
+                        s.getFeedback()))
                 .toList();
     }
 

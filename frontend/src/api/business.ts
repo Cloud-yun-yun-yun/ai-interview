@@ -91,6 +91,8 @@ export interface InterviewSessionVO {
     sessionEvaluateStatus: AsyncTaskStatus;
     createTime: string;
     sessionName: string;
+    totalScore: string;
+    feedback:string;
 }
 
 export interface CreateInterviewSessionDTO {
@@ -148,4 +150,15 @@ export function getKnowledgeBaseList() {
 }
 export function deleteKnowledgeBase(kbId: number) {
     return service.delete(`/api/kbs/${kbId}`) as any
+}
+
+export interface KnowledgeBaseQuestionVO {
+    type: string;
+    question: string;
+    topicSummary: string;
+    referenceAnswer: string;
+    scoringRubric: string;
+}
+export function getKnowledgeBaseQuestions(kbId: number | string) {
+    return service.get<KnowledgeBaseQuestionVO[]>('/api/kbs/question', { params: { kbId } }) as any
 }

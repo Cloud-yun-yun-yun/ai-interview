@@ -8,6 +8,8 @@ public record InterviewSessionVO(
         AsyncTaskStatus sessionEvaluateStatus,
         AsyncTaskStatus sessionQuestionGenStatus,
         String createTime,
-        String sessionName
+        String sessionName,
+        String totalScore,
+        String feedback
 ) {
 }

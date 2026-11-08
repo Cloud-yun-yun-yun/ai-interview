@@ -14,6 +14,7 @@ import com.yun.aiinterview.mapper.KnowledgeBaseMapper;
 import com.yun.aiinterview.mapper.KnowledgeBaseQuestionMapper;
 import com.yun.aiinterview.pojo.dto.ConsumerConfig;
 import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
+import com.yun.aiinterview.pojo.vo.KnowledgeBaseQuestionVO;
 import com.yun.aiinterview.pojo.vo.KnowledgeBaseVO;
 import org.redisson.api.StreamMessageId;
 import org.springframework.ai.document.Document;
@@ -305,6 +306,27 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                 .orderByDesc(KnowledgeBase::getUploadedAt)
                 .list();
         return list.stream().map(this::toVO).toList();
+    }
+
+    /**
+     * 根据知识库 ID 查询题库列表
+     *
+     * @param kbId 知识库 ID
+     * @return 题目 VO 列表
+     */
+    public List<KnowledgeBaseQuestionVO> listQuestions(Long kbId) {
+        return knowledgeBaseQuestionMapper.selectList(
+                        new LambdaQueryWrapper<KnowledgeBaseQuestion>()
+                                .eq(KnowledgeBaseQuestion::getKbId, kbId))
+                .stream()
+                .map(q -> new KnowledgeBaseQuestionVO(
+                        q.getType(),
+                        q.getQuestion(),
+                        q.getTopicSummary(),
+                        q.getReferenceAnswer(),
+                        q.getScoringRubric()
+                ))
+                .toList();
     }
 
     /**
