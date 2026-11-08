@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getSessionList, type InterviewSessionVO } from "@/api/business"
-import { ElMessage } from "element-plus"
-import { Monitor, VideoPlay, CircleCheck } from "@element-plus/icons-vue"
+import {type AsyncTaskStatus, getSessionList, type InterviewSessionVO, removeSession} from "@/api/business"
+import {ElMessage, ElMessageBox} from "element-plus"
+import {
+  Monitor,
+  VideoPlay,
+  CircleCheck,
+  CirclePlus,
+  Loading,
+  CircleClose,
+  Delete
+} from "@element-plus/icons-vue"
 const router = useRouter()
 
 const sessions = ref<InterviewSessionVO[]>([])
@@ -29,7 +37,7 @@ const checkTask = ()=>{
       const res = await getSessionList()
       console.log(res)
       sessions.value = res
-      const hasEvaluating = res.some((item) => item.status === 'EVALUATING');
+      const hasEvaluating = res.some((item) => item.sessionEvaluateStatus !== 'COMPLETED' && item.sessionEvaluateStatus !== 'FAILED');
       if(hasEvaluating) {
         checkTask()
       }
@@ -67,11 +75,33 @@ const handleRowClick = (s: InterviewSessionVO) => {
   router.push(`/backend/record/evaluate/${s.sessionId}`)
 }
 
-const statusTag = (s: InterviewSessionVO) => {
-  if (s.sessionStatus === 'CREATED') return { type: 'primary' as const, text: '进行中' }
-  if (s.sessionStatus === 'SUBMITTED') return { type: 'warning' as const, text: '评估中' }
-  if (s.sessionStatus === 'EVALUATED') return { type: 'success' as const, text: '已完成' }
-  return { type: 'info' as const, text: s.sessionStatus }
+const statusMap: Record<AsyncTaskStatus, { icon: any; text: string; color: string }> = {
+  PENDING: { icon: CirclePlus, text: '待分析', color: '#909399' },
+  PROCESSING: { icon: Loading, text: '分析中', color: '#e6a23c' },
+  COMPLETED: { icon: CircleCheck, text: '已完成', color: '#67c23a' },
+  FAILED: { icon: CircleClose, text: '失败', color: '#f56c6c' },
+};
+const handleDelete = async (sessionId:string)=>{
+  try {
+    // 1. 弹出确认框
+    await ElMessageBox.confirm(
+        '是否删除该记录？删除后将不可恢复。',
+        '警告',
+        {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+    )
+    await removeSession(sessionId)
+    sessions.value = sessions.value.filter(item => item.sessionId !== sessionId)
+    ElMessage.success('删除成功')
+  } catch (error: any) {
+    if (error === 'cancel' || error?.message === 'cancel') {
+      return
+    }
+    console.error('删除失败', error)
+  }
 }
 </script>
 
@@ -114,9 +144,19 @@ const statusTag = (s: InterviewSessionVO) => {
           <span>{{ row.createTime }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" min-width="100" align="center">
+      <el-table-column label="评估状态" min-width="100" align="center">
         <template #default="{ row }">
-          <el-tag :type="statusTag(row).type" effect="light">{{ statusTag(row).text }}</el-tag>
+          <template v-if="row.sessionEvaluateStatus">
+            <div
+                class="status-text-wrapper"
+                :style="{ color: statusMap[row.sessionEvaluateStatus]?.color }"
+            >
+              <el-icon>
+                <component :is="statusMap[row.sessionEvaluateStatus]?.icon" />
+              </el-icon>
+              <span>{{ statusMap[row.sessionEvaluateStatus]?.text || row.sessionEvaluateStatus}}</span>
+            </div>
+          </template>
         </template>
       </el-table-column>
       <el-table-column label="当前进度" min-width="100" align="center">
@@ -125,7 +165,7 @@ const statusTag = (s: InterviewSessionVO) => {
           <span v-else>已完成</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="120" fixed="right" align="center">
+      <el-table-column label="操作" min-width="120"  align="center">
         <template #default="{ row }">
           <el-button
               v-if="isInProgress(row)"
@@ -134,7 +174,19 @@ const statusTag = (s: InterviewSessionVO) => {
               :icon="VideoPlay"
               @click.stop="handleContinue(row)"
           >继续作答</el-button>
-          <el-icon v-else-if="row.status === 'EVALUATED'" color="#67c23a"><CircleCheck/></el-icon>
+          <div class="status-text-wrapper"
+               v-else-if="row.sessionStatus === 'EVALUATED'">
+            <el-icon  color="#67c23a"><CircleCheck/></el-icon>
+            <span style="color: #67c23a;">查看评估</span>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="删除" width="100" align="center">
+        <template  #default="{ row }">
+          <el-icon @click.stop="handleDelete(row.sessionId)"
+                   class="delete-icon"
+                   size="16" >
+            <Delete/></el-icon>
         </template>
       </el-table-column>
     </el-table>
@@ -191,5 +243,19 @@ const statusTag = (s: InterviewSessionVO) => {
   height: 60px;
   color: #606266;
   font-size: 14px;
+}
+.status-text-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.delete-icon {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.delete-icon:hover {
+  color: #f56c6c;
 }
 </style>

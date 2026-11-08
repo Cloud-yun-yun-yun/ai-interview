@@ -67,25 +67,11 @@ export function getResumeDetail(resumeId: number) {
     return service.get<ResumeAnalysisResponse>('/api/resume/analysis/result', { params: { resumeId } }) as any
 }
 
-export function getResumeStatus(resumeId: number) {
-    return service.get<AsyncTaskStatus>('/api/resume/status', { params: { resumeId } }) as any
+export function removeSession(sessionId) {
+    return service.delete(`/api/interview/session/remove`, {
+        params: { sessionId: sessionId }
+    })
 }
-
-export interface ResumeStatusVO {
-    resumeId: number
-    status: AsyncTaskStatus
-}
-
-export function getResumeStatusBatch(resumeIds: number[]) {
-    return service.get<ResumeStatusVO[]>('/api/resume/status/batch', {
-        params: { resumeIds: resumeIds.join(',') }
-    }) as any
-}
-
-export function getResumeStatusAll() {
-    return service.get<ResumeStatusVO[]>('/api/resume/status/all') as any
-}
-
 export type InterviewSessionStatus = 'CREATED' | 'SUBMITTED' | 'EVALUATED';
 
 export interface InterviewQuestionVO {

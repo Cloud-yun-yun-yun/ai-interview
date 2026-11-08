@@ -1,15 +1,26 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import { onMounted, onUnmounted, ref} from 'vue';
-import {ArrowRight, DataAnalysis, Delete, Document, Files, CirclePlus, Loading, CircleCheck, CircleClose} from "@element-plus/icons-vue";
-import {getResumeList, type ResumeVO, type AsyncTaskStatus, deleteResume, getResumeStatusBatch} from "@/api/business";
+import {
+  ArrowRight,
+  DataAnalysis,
+  Delete,
+  Document,
+  Files,
+  CirclePlus,
+  Loading,
+  CircleCheck,
+  CircleClose,
+  Remove
+} from "@element-plus/icons-vue";
+import {getResumeList, type ResumeVO, type AsyncTaskStatus, deleteResume} from "@/api/business";
 import { analysisResume } from "@/api/business";
 import { ElMessage, ElMessageBox } from "element-plus";
 const resumeList = ref<ResumeVO[]>([]);
 const router = useRouter();
 
-const POLL_INTERVAL = 2000;
-let pollingTimer: ReturnType<typeof setInterval> | null = null;
+const POLL_INTERVAL = 3000;
+let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 
 const statusMap: Record<AsyncTaskStatus, { icon: any; text: string; color: string }> = {
   PENDING: { icon: CirclePlus, text: '待分析', color: '#909399' },
@@ -28,35 +39,30 @@ const analysis = async (resumeId: number) => {
 
 const stopPolling = () => {
   if (pollingTimer !== null) {
-    clearInterval(pollingTimer);
+    clearTimeout(pollingTimer);
     pollingTimer = null;
   }
 };
 
 const startPolling = () => {
   stopPolling();
-  pollingTimer = setInterval(async () => {
-    const pendingIds = resumeList.value
-        .filter(r => r.asyncTaskStatus === 'PENDING' || r.asyncTaskStatus === 'PROCESSING')
-        .map(r => r.id);
-    if (pendingIds.length === 0) {
-      stopPolling();
-      return;
+  pollingTimer = setTimeout(async () => {
+    try{
+      const res = await getResumeList()
+      resumeList.value = res
+      const hasAnaylising = res.some((item)=>item.asyncTaskStatus !== 'COMPLETED' && item.asyncTaskStatus !== 'FAILED')
+      if(hasAnaylising) {
+        startPolling
+      }
+      else {
+        stopPolling()
+      }
+    }catch(error){
+      console.error('轮询检查任务失败:', error)
+      ElMessage.error('轮询检查任务失败，请稍后重试')
+      stopPolling()
     }
-    try {
-      const statusList = await getResumeStatusBatch(pendingIds) as any[];
-      if (!statusList) return;
-      const statusMap2 = new Map(statusList.map((s: any) => [s.resumeId, s.status]));
-      resumeList.value.forEach(r => {
-        const newStatus = statusMap2.get(r.id);
-        if (newStatus) {
-          r.asyncTaskStatus = newStatus;
-        }
-      });
-    } catch (e) {
-      console.error('轮询状态失败:', e);
-    }
-  }, POLL_INTERVAL);
+  }, POLL_INTERVAL)
 };
 
 const handleDelete = async (resumeId: number) => {
@@ -151,9 +157,7 @@ onUnmounted(() => {
                   class="status-text-wrapper"
                   :style="{ color: statusMap[scope.row.asyncTaskStatus]?.color }"
               >
-                <el-icon
-                    :class="{ 'is-loading': scope.row.asyncTaskStatus === 'PROCESSING' }"
-                >
+                <el-icon>
                   <component :is="statusMap[scope.row.asyncTaskStatus]?.icon" />
                 </el-icon>
                 <span>{{ statusMap[scope.row.asyncTaskStatus]?.text || scope.row.asyncTaskStatus }}</span>
@@ -257,14 +261,5 @@ onUnmounted(() => {
   justify-content: center; /* 如果你的列设置了 align="center"，这里会居中显示 */
   gap: 4px; /* 图标和文字之间的间距 */
   font-size: 14px;
-}
-
-/* 让 Loading 图标旋转 */
-.is-loading {
-  animation: rotating 2s linear infinite;
-}
-@keyframes rotating {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 </style>
