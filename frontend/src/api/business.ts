@@ -162,3 +162,12 @@ export interface KnowledgeBaseQuestionVO {
 export function getKnowledgeBaseQuestions(kbId: number | string) {
     return service.get<KnowledgeBaseQuestionVO[]>('/api/kbs/question', { params: { kbId } }) as any
 }
+
+export interface QuestionGenStatusVO {
+    knowledgeBaseId: number;
+    questionGenStatus: QuestionGenStatus;
+    questionGenTaskId: string;
+}
+export function generateKnowledgeBaseQuestions(kbId: number | string) {
+    return service.post<QuestionGenStatusVO>('/api/kbs/generate', { kbId }) as any
+}

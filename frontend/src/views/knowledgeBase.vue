@@ -2,16 +2,21 @@
 import { useRouter } from 'vue-router';
 import { onMounted, ref } from 'vue';
 import {
-  ArrowRight, Delete, Document, Reading, CirclePlus, Loading, CircleCheck, CircleClose
+  ArrowRight, Delete, Document, Reading, CirclePlus, Loading, CircleCheck, CircleClose, Edit
 } from "@element-plus/icons-vue";
 import {
   getKnowledgeBaseList,
+  generateKnowledgeBaseQuestions,
   deleteKnowledgeBase,
   type KnowledgeBaseVO,
   type AsyncTaskStatus,
-  type QuestionGenStatus
+  type QuestionGenStatus,
+  type QuestionGenStatusVO
 } from "@/api/business";
 import { ElMessage, ElMessageBox } from "element-plus";
+
+const POLL_INTERVAL = 3000;
+let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 
 const router = useRouter();
 
@@ -19,7 +24,7 @@ const kbList = ref<KnowledgeBaseVO[]>([]);
 const loading = ref(false);
 
 const vectorStatusMap: Record<AsyncTaskStatus, { icon: any; text: string; color: string }> = {
-  PENDING: { icon: Loading, text: '向量化中', color: '#e6a23c' },
+  PENDING: { icon: Loading, text: '准备中', color: '#e6a23c' },
   PROCESSING: { icon: Loading, text: '向量化中', color: '#e6a23c' },
   COMPLETED: { icon: CircleCheck, text: '已就绪', color: '#67c23a' },
   FAILED: { icon: CircleClose, text: '失败', color: '#f56c6c' },
@@ -51,6 +56,29 @@ const handleDelete = async (kbId: number) => {
     console.error('删除失败:', e);
   }
 }
+const stopPolling = () => {
+  if (pollingTimer !== null) {
+    clearTimeout(pollingTimer);
+    pollingTimer = null;
+  }
+};
+const startPolling = () => {
+  stopPolling();
+  pollingTimer = setTimeout(async () => {
+    const res = await getKnowledgeBaseList();
+    kbList.value = res || [];
+    const hasAsyncTask = res.some((item) =>
+        ['PENDING', 'PROCESSING'].includes(item.vectorStatus) ||
+        ['QUEUED', 'PROCESSING'].includes(item.questionGenStatus)
+    );
+    if(hasAsyncTask){
+      startPolling();
+    }
+    else {
+      stopPolling()
+    }
+  }, POLL_INTERVAL);
+};
 
 const handleInterview = () => {
   router.push('/backend/interview');
@@ -58,6 +86,23 @@ const handleInterview = () => {
 
 const handleRowClick = (row: KnowledgeBaseVO) => {
   router.push(`/backend/knowledgeBase/detail/${row.id}`);
+}
+
+const handleGenerateQuestions = async (id: number) => {
+  console.log(id)
+  try {
+    const res: QuestionGenStatusVO = await generateKnowledgeBaseQuestions(id);
+    console.log(res);
+    if(res.questionGenStatus==="FAILED"){
+      ElMessage.error('出题任务发布失败');
+      return;
+    }
+    startPolling()
+    ElMessage.success('出题中，请稍后...');
+    } catch (e) {
+    console.error('出题任务发布失败:', e);
+    ElMessage.error('出题任务发布失败');
+  }
 }
 
 onMounted(async () => {
@@ -165,8 +210,14 @@ onMounted(async () => {
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="100" fixed="right" align="center">
+      <el-table-column label="操作" width="200" fixed="right" align="center">
         <template #default="scope">
+          <el-button type="primary" link :icon="Edit"
+                     :disabled="scope.row.questionGenStatus === 'COMPLETED'
+                     || scope.row.questionGenStatus === 'PROCESSING'
+                     || scope.row.questionGenStatus === 'QUEUED'"
+          @click.stop="handleGenerateQuestions(scope.row.id)"
+          > {{ scope.row.questionGenStatus === 'FAILED' ? '重试' : '分析' }}</el-button>
           <el-button
               type="danger"
               link

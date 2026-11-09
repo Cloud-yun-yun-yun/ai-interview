@@ -43,12 +43,10 @@ const goRecord = () => {
             <span class="score-text">{{ session.totalScore }}<span class="score-unit">分</span></span>
           </template>
         </el-progress>
-      </div>
-      <div class=records-title>
-        <el-icon class="title-icon"><TrendCharts /></el-icon>
-        <span class="info-label">面试评估</span>
-      </div>
-      <div class="score-info">
+        <div class= "evaluate-content-title">
+          <el-icon class="title-icon"><TrendCharts /></el-icon>
+          <span class="info-label">面试评估</span>
+        </div>
         <span class="info-feedback">{{session.feedback}}</span>
       </div>
     </div>
@@ -130,6 +128,11 @@ const goRecord = () => {
   padding:20px;
   transition: transform 0.2s, box-shadow 0.2s; /* 鼠标悬停时的动效 */
 }
+.evaluate-content-title{
+  display:flex;
+  align-items: center;
+  gap:8px;
+}
 /* 鼠标悬停卡片时微微上浮 */
 .evaluate-score:hover {
   transform: translateY(-2px);
@@ -138,23 +141,15 @@ const goRecord = () => {
 .evaluate-score :deep(.el-progress--circle) {
   margin-right: 15px;
 }
-.score-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width:800px;
-  background-color: #ffffff;
-  border-radius: 25px;
-  box-sizing:border-box;
-  padding:20px;
-}
 .info-feedback {
-  font-size: 15px; /* 15px 或 16px 是最适合阅读的正文大小 */
-  color: #303133; /* 改成深灰色，对比度好，看起来不累 */
-  line-height: 1.8; /* 行高拉大，段落呼吸感就出来了 */
-  text-align: justify; /* 两端对齐，右侧边缘会像书本一样整齐 */
+  font-size: 13px;
+  color: #303133;
+  line-height: 1.8;
+  text-align: justify;
   word-break: break-word;
+  padding:15px;
+  background-color: #f0f2ff;
+  border-radius: 15px;
 }
 .evaluate-score :deep(.el-progress-circle) {
   width: 160px !important;
@@ -242,5 +237,4 @@ const goRecord = () => {
   color: #303133;
   font-size: 14px;
 }
-
 </style>

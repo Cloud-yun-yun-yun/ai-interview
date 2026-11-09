@@ -10,8 +10,7 @@ import {
   CirclePlus,
   Loading,
   CircleCheck,
-  CircleClose,
-  Remove
+  CircleClose
 } from "@element-plus/icons-vue";
 import {getResumeList, type ResumeVO, type AsyncTaskStatus, deleteResume} from "@/api/business";
 import { analysisResume } from "@/api/business";
