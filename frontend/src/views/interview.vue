@@ -1,25 +1,12 @@
 <script setup lang="ts">
-import {onMounted, ref, onUnmounted} from 'vue'
+import {onMounted, ref} from 'vue'
 import { useRouter } from 'vue-router'
 import { Document, Collection, Loading } from '@element-plus/icons-vue'
-import {ElMessage, ElMessageBox} from 'element-plus'
-import {createInterviewWithKb,
-  createInterviewWithResume,
-  getResumeList,
-  getSession,
-  type CreateInterviewSessionDTO,
-  type CreateKbInterviewSessionDTO,
-  getKnowledgeBaseList,
-  type ResumeVO,
-  type KnowledgeBaseVO,
-  type InterviewSessionVO,
-  type AsyncTaskStatus
-} from "@/api/business.ts";
+import {ElMessage} from 'element-plus'
+import {createInterviewWithKb, createInterviewWithResume, getResumeList, getKnowledgeBaseList,
+  type ResumeVO, type KnowledgeBaseVO} from "@/api/business.ts";
 
 const router = useRouter()
-
-const CURRENT_SESSION_KEY = 'currentInterviewSessionId'
-const POLL_INTERVAL = 2000
 
 interface Resume {
   id: number
@@ -29,24 +16,36 @@ interface Knowledge {
   id: number
   name: string
 }
-
-const resumeDto = ref<CreateInterviewSessionDTO>({
-  resumeId: 0,
-  requestId: ''
-})
-const kbDto = ref<CreateKbInterviewSessionDTO>({
-  kbId: 0,
-  requestId: ''
-})
-
 const selectedResume = ref('')
 const selectedKnowledge = ref('')
 const resumeOptions = ref<Resume[]>([])
 const knowledgeOptions = ref<Knowledge[]>([])
 const loading = ref(false)
 
-let pollingTimer: ReturnType<typeof setInterval> | null = null
+// 开始面试
+const handleStart = async () => {
+  const resumeId = selectedResume.value ? Number(selectedResume.value) : null
+  const kbId = selectedKnowledge.value ? Number(selectedKnowledge.value) : null
 
+  if (!resumeId && !kbId) {
+    ElMessage.warning('请选择一种面试素材')
+    return
+  }
+  loading.value = true
+  try {
+    const requestId = crypto.randomUUID()
+    const session = resumeId
+        ? await createInterviewWithResume({ resumeId, requestId })
+        : await createInterviewWithKb({ kbId: kbId!, requestId })
+
+    if (!session?.sessionId) throw new Error('no sessionId')
+    const sessionId = session.sessionId
+    router.push({ name: 'interviewExam', params: { sessionId } })
+  }catch (e) {
+    loading.value = false
+    ElMessage.error('创建面试会话失败，请稍后重试')
+  }
+}
 onMounted(async () => {
   try {
     const [resumeRes, kbRes] = await Promise.all([getResumeList(), getKnowledgeBaseList()])
@@ -68,120 +67,6 @@ onMounted(async () => {
     console.error('获取素材列表失败', error)
   }
 })
-
-onUnmounted(() => {
-  stopPolling()
-})
-
-// 抽取公共逻辑：根据已选素材创建面试会话，返回 sessionId
-const createSession = async (): Promise<string> => {
-  const hasResume = !!selectedResume.value;
-  const hasKb = !!selectedKnowledge.value;
-  const requestId = crypto.randomUUID();
-  resumeDto.value.requestId = requestId;
-  kbDto.value.requestId = requestId;
-
-  // 同时选择时，让用户选择基于哪个素材面试
-  if (hasResume && hasKb) {
-    return new Promise<string>((resolve) => {
-      ElMessageBox.confirm(
-          '您同时选择了简历和知识库，请决定本次面试将基于哪一个进行？',
-          '选择面试模式',
-          {
-            distinguishCancelAndClose: true,
-            confirmButtonText: '基于简历面试',
-            cancelButtonText: '基于知识库面试',
-            type: 'info',
-          }
-      ).then(async () => {
-        resumeDto.value.resumeId = Number(selectedResume.value)
-        const result = await createInterviewWithResume(resumeDto.value) as InterviewSessionVO | null
-        resolve(result?.sessionId || '')
-      }).catch(async (action: string) => {
-        if (action === 'cancel') {
-          kbDto.value.kbId = Number(selectedKnowledge.value)
-          const result = await createInterviewWithKb(kbDto.value) as InterviewSessionVO | null
-          resolve(result?.sessionId || '')
-        } else {
-          resolve('')
-        }
-      })
-    })
-  }
-
-  if (hasResume) {
-    resumeDto.value.resumeId = Number(selectedResume.value)
-    const result = await createInterviewWithResume(resumeDto.value) as InterviewSessionVO | null
-    return result?.sessionId || ''
-  }
-
-  kbDto.value.kbId = Number(selectedKnowledge.value)
-  const result = await createInterviewWithKb(kbDto.value) as InterviewSessionVO | null
-  return result?.sessionId || ''
-}
-
-const stopPolling = () => {
-  if (pollingTimer !== null) {
-    clearInterval(pollingTimer)
-    pollingTimer = null
-  }
-}
-
-// 轮询面试题目生成状态，COMPLETED 才跳转面试页
-const startPolling = (sessionId: string) => {
-  stopPolling()
-  pollingTimer = setInterval(async () => {
-    try {
-      const session = await getSession(sessionId) as InterviewSessionVO | null
-      const status = session?.sessionQuestionGenStatus as AsyncTaskStatus | undefined
-      if (status === 'COMPLETED') {
-        stopPolling()
-        localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
-        router.push(`/backend/interview/exam/${sessionId}`)
-      } else if (status === 'FAILED') {
-        stopPolling()
-        loading.value = false
-        ElMessage.error('AI 出题失败，请稍后重试')
-      }
-    } catch (error) {
-      console.error('查询面试状态失败:', error)
-      stopPolling()
-      loading.value = false
-      ElMessage.error('查询面试状态失败，请稍后重试')
-    }
-  }, POLL_INTERVAL)
-}
-
-// 开始面试
-const handleStart = async () => {
-  const hasResume = !!selectedResume.value;
-  const hasKb = !!selectedKnowledge.value;
-
-  if (!hasResume && !hasKb) {
-    if (resumeOptions.value.length === 0 && knowledgeOptions.value.length === 0) {
-      ElMessage.warning('您还没有上传任何简历或知识库，请先去上传！')
-    } else {
-      ElMessage.warning('请至少选择一项素材开始面试')
-    }
-    return
-  }
-
-  loading.value = true
-  try {
-    const sessionId = await createSession()
-    if (sessionId) {
-      localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
-      startPolling(sessionId)
-    } else {
-      loading.value = false
-      ElMessage.error('AI 出题失败，请稍后重试')
-    }
-  } catch (error) {
-    loading.value = false
-    console.error('创建面试失败:', error)
-    ElMessage.error('创建面试会话失败，请稍后重试')
-  }
-}
 </script>
 
 <template>
@@ -215,6 +100,7 @@ const handleStart = async () => {
               placeholder="请选择一份已上传的简历（不选则为通用提问）"
               class="custom-select"
               clearable
+              :disabled="!!selectedKnowledge"
           >
             <el-option
                 v-for="item in resumeOptions"
@@ -239,6 +125,7 @@ const handleStart = async () => {
               placeholder="请选择一个已上传的知识库"
               class="custom-select"
               clearable
+              :disabled="!!selectedResume"
           >
             <el-option
                 v-for="item in knowledgeOptions"

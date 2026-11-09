@@ -2,7 +2,7 @@
 import {computed, onMounted, ref, nextTick} from "vue";
 import  {getSession, getSessionQuestions, submitAnswer,
   type InterviewQuestionVO, type InterviewSessionVO, type QuestionAnswer} from "@/api/business.ts";
-import {Monitor, Promotion, User} from "@element-plus/icons-vue";
+import {Loading, Monitor, Promotion, User} from "@element-plus/icons-vue";
 import { useRoute , useRouter} from 'vue-router'
 import {ElMessage} from "element-plus";
 
@@ -57,13 +57,7 @@ const handleSubmit = async ()=>{
     session.value = await submitAnswer(payload)
     if(session.value.sessionStatus === 'SUBMITTED'){
       ElMessage.success("提交成功，准备评估")
-      //todo 跳转进入评估页面
-      router.push({
-        name: 'evaluate',
-        params: {
-          sessionId: String(sessionId)
-        }
-      })
+      router.push({ name: 'record' })
       return
     }
     const nextIdx = session.value.currentIndex;
@@ -81,21 +75,17 @@ const handleSubmit = async ()=>{
   } finally {
     submitting.value = false;
   }
-
 }
 </script>
 
 <template>
-  <div v-if="!currentQuestions.length" class="exam-container">
-    <div class="exam-header">
-      <div class="header-title">
-        <div class="title-icon"><el-icon><Monitor/></el-icon></div>
-        <span class="title-text">模拟面试</span>
-      </div>
-      <span>暂无可用题目</span>
-    </div>
+  <div v-if="currentQuestions.length === 0" class="loading-view">
+    <el-icon class="loading-icon" :size="56">
+      <Loading />
+    </el-icon>
+    <p class="loading-text">AI 正在为您生成面试题目...</p>
+    <p class="loading-sub">请稍候，这可能需要几秒钟</p>
   </div>
-
   <div v-else class="exam-container">
     <div class="exam-header">
       <div class="header-title">
@@ -104,7 +94,6 @@ const handleSubmit = async ()=>{
       </div>
       <span>认真回答问题展示你的实力</span>
     </div>
-
     <div class="exam-progress">
       <div>题目 {{ currentIndex }} / {{ questions.length }}</div>
       <el-progress
@@ -114,7 +103,6 @@ const handleSubmit = async ()=>{
           :stroke-width="8"
       />
     </div>
-
     <div class="exam-content">
       <div class="content-question" ref="chatScrollRef">
         <div class="question-item"
@@ -161,6 +149,36 @@ const handleSubmit = async ()=>{
 </template>
 
 <style scoped>
+/* Loading 视图 */
+.loading-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 80vh;
+  gap: 16px;
+  background: radial-gradient(circle at center, #2c2c2c 0%, #1a1a1a 100%);
+}
+.loading-icon {
+  color: #626aef;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.loading-text {
+  font-size: 18px;
+  color: #333;
+  font-weight: 500;
+  margin: 0;
+}
+.loading-sub {
+  font-size: 14px;
+  color: #999;
+  margin: 0;
+}
 .exam-container {
   display: flex;
   flex-direction: column;
