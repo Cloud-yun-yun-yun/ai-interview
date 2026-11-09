@@ -37,7 +37,11 @@ const checkTask = ()=>{
       const res = await getSessionList()
       console.log(res)
       sessions.value = res
-      const hasEvaluating = res.some((item) => item.sessionEvaluateStatus !== 'COMPLETED' && item.sessionEvaluateStatus !== 'FAILED');
+      const hasEvaluating = res.some((item) =>
+          item.sessionStatus === 'SUBMITTED' &&
+          item.sessionEvaluateStatus !== 'COMPLETED' &&
+          item.sessionEvaluateStatus !== 'FAILED'
+      );
       if(hasEvaluating) {
         checkTask()
       }
@@ -146,16 +150,20 @@ const handleDelete = async (sessionId:string)=>{
       </el-table-column>
       <el-table-column label="评估状态" min-width="100" align="center">
         <template #default="{ row }">
-          <template v-if="row.sessionEvaluateStatus">
+          <template v-if="row.sessionEvaluateStatus && row.sessionStatus !== 'CREATED'">
             <div
                 class="status-text-wrapper"
                 :style="{ color: statusMap[row.sessionEvaluateStatus]?.color }"
             >
-              <el-icon>
+              <el-icon v-if="statusMap[row.sessionEvaluateStatus]?.icon">
                 <component :is="statusMap[row.sessionEvaluateStatus]?.icon" />
               </el-icon>
+              <el-icon v-else><CirclePlus /></el-icon>
               <span>{{ statusMap[row.sessionEvaluateStatus]?.text || row.sessionEvaluateStatus}}</span>
             </div>
+          </template>
+          <template v-else>
+              <span>请先完成考试</span>
           </template>
         </template>
       </el-table-column>

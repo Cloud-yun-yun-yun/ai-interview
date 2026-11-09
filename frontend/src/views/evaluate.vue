@@ -4,7 +4,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getSession, getSessionQuestions,
   type InterviewSessionVO, type InterviewQuestionVO } from '@/api/business'
-//todo 完善总分与问答记录的空状态展示
+
 const router = useRouter()
 const route = useRoute()
 
@@ -40,14 +40,14 @@ const goRecord = () => {
       <div class="evaluate-score" >
         <el-progress type="circle" :percentage="Number(session.totalScore) || 0" :width="80" color="#7471F0">
           <template #default>
-            <span class="score-text">{{ session.totalScore }}<span class="score-unit">分</span></span>
+            <span class="score-text">{{ session.totalScore || 0 }}<span class="score-unit">分</span></span>
           </template>
         </el-progress>
         <div class= "evaluate-content-title">
           <el-icon class="title-icon"><TrendCharts /></el-icon>
           <span class="info-label">面试评估</span>
         </div>
-        <span class="info-feedback">{{session.feedback}}</span>
+        <span class="info-feedback">{{ session.feedback || '暂无反馈' }}</span>
       </div>
     </div>
     <div class="records-title">
@@ -56,6 +56,7 @@ const goRecord = () => {
     </div>
     <div class="exam-records">
       <div class="exam-card" v-for="(q, index) in sessionQuestions" :key="index">
+        <el-empty v-if="sessionQuestions.length === 0" description="暂无问答记录" />
         <div class="exam-records-targ">
           <span class="tag-number">{{ index + 1 }}</span>
           <span class="tag-lang">{{ q.type }}</span>

@@ -240,6 +240,7 @@ const handleSubmit = async ()=>{
   height:30px;
   background-color: #7b82f3;
   color: #ffffff;
+  flex-shrink: 0;
   border-radius:50%;
   align-self: flex-start;
   box-sizing: border-box;

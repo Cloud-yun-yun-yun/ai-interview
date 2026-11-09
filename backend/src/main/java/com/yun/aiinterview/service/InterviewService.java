@@ -139,7 +139,6 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         );
     }
 
-    @Transactional
     public InterviewSessionVO createByResume( Long resumeId, Long userId) {
 
         // 同一份简历只能存在一个未提交的会话：若已有 CREATED 状态的会话，禁止重复创建
@@ -165,18 +164,12 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .sessionStatus(InterviewSession.STATUS_CREATED)
                 .sessionQuestionGenStatus(AsyncTaskStatus.PENDING)
                 .sessionName(sessionName)
-                .createTime(LocalDateTime.now().toString())
+                .createTime(LocalDate.now().toString())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
 
-        // 事务提交之后再投递出题任务，确保消费端能读到已提交的会话数据，避免竞态
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                sendQuestionGenTask(interviewSession.getSessionId(), userId, resumeId);
-            }
-        });
+        sendQuestionGenTask(interviewSession.getSessionId(), userId, resumeId);
 
         //返回面试会话VO
         InterviewSessionVO interviewSessionVO = new InterviewSessionVO(
@@ -292,7 +285,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .sessionStatus(InterviewSession.STATUS_CREATED)
                 .sessionQuestionGenStatus(AsyncTaskStatus.COMPLETED)
                 .sessionName(sessionName)
-                .createTime(LocalDateTime.now().toString())
+                .createTime(LocalDate.now().toString())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -743,7 +736,6 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
     public List<InterviewSessionVO> listSessions(Long userId) {
         return lambdaQuery()
                 .eq(InterviewSession::getUserId, userId)
-                .orderByDesc(InterviewSession::getSessionId)
                 .list()
                 .stream()
                 .map(s -> new InterviewSessionVO(
@@ -751,8 +743,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                         s.getUserId(),
                         s.getCurrentIndex(),
                         s.getSessionStatus(),
-                        s.getSessionQuestionGenStatus(),
                         s.getSessionEvaluateStatus(),
+                        s.getSessionQuestionGenStatus(),
                         s.getCreateTime() == null ? null : s.getCreateTime().toString(),
                         s.getSessionName(),
                         toScoreString(s.getTotalScore()),

@@ -84,24 +84,24 @@ const handleChange = async (uploadFile: UploadFile) => {
 }
 .page-top {
   padding-top: 100px;
-  padding-bottom: 50px; /* 稍微缩小一点间距 */
+  padding-bottom: 50px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px; /* 标题和副标题靠紧一点 */
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 36px; /* 👈 从 48px 降到 36px，克制一点 */
-  color: #1a1a1a; /* 不要纯黑 #000 或 #333 */
-  font-weight: 600; /* 用 600 加粗，但字不要太大 */
+  font-size: 36px;
+  color: #1a1a1a;
+  font-weight: 600;
   letter-spacing: 1px; /* 增加一点字间距，显高级 */
   line-height: 1.4;
 }
 
 .page-subtitle {
-  font-size: 16px; /* 👈 从 24px 降到 16px，这才是正常副标题大小 */
-  color: #8c92a4; /* 偏蓝灰，比纯灰好看 */
+  font-size: 16px;
+  color: #8c92a4;
   font-weight: 400;
   letter-spacing: 0.5px;
 }
