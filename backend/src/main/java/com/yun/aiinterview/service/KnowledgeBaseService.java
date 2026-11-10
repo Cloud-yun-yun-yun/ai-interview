@@ -225,7 +225,6 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         } catch (Exception e) {
             try{
                 log.error("知识库向量化任务处理异常: messageId={}", messageId, e);
-                // ACK 完之后，再根据重试次数决定是标记失败，还是发新消息重试
                 if (Integer.parseInt(retryCount) >= AsyncTaskConstants.MAX_RETRY_COUNT) {
                     log.warn("知识库向量化任务重试次数超过最大重试次数，丢弃: messageId={}", messageId);
                     asyncStateService.vectorMarkFailed(kbId);

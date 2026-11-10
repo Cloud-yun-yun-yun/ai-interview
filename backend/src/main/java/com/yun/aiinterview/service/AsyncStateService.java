@@ -1,7 +1,10 @@
 package com.yun.aiinterview.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.yun.aiinterview.entity.InterviewSession;
 import com.yun.aiinterview.handler.BusinessException;
+import com.yun.aiinterview.mapper.InterviewQuestionMapper;
+import com.yun.aiinterview.mapper.InterviewSessionMapper;
 import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
 import lombok.RequiredArgsConstructor;
 import com.yun.aiinterview.entity.KnowledgeBase;
@@ -27,6 +30,8 @@ public class AsyncStateService {
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final KnowledgeBaseQuestionMapper knowledgeBaseQuestionMapper;
+    private final InterviewQuestionMapper interviewQuestionMapper;
+    private final InterviewSessionMapper interviewSessionMapper;
 
     /**
      * 问题生成任务的状态处理

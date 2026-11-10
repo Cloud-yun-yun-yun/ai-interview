@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.time.LocalDate;
 
@@ -75,9 +76,14 @@ public class InterviewSession {
 
     /** 会话创建时间（精确到日） */
     @TableField("create_time")
-    private String createTime;
+    private LocalDateTime createTime;
 
     /** 会话名称（素材名+面试） */
     @TableField("session_name")
     private String sessionName;
+
+    @TableField("async_task_updated_at")
+    private LocalDateTime asyncTaskUpdatedAt;
+
+
 }

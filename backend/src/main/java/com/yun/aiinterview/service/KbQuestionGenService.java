@@ -36,7 +36,6 @@ import static com.yun.aiinterview.constant.AsyncTaskConstants.*;
 @Slf4j
 public class KbQuestionGenService {
 
-
     private final AsyncStateService stateService;
     private final ChatClient chatClient;
     private final KnowledgeBaseService knowledgeBaseService;
@@ -44,7 +43,6 @@ public class KbQuestionGenService {
     private final PromptTemplate systemPromptTemplate;
     private final PromptTemplate userPromptTemplate;
     private final AsyncTaskStreamService asyncTaskStreamService;
-
 
     private String consumerName;
 

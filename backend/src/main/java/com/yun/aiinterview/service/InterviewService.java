@@ -164,7 +164,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .sessionStatus(InterviewSession.STATUS_CREATED)
                 .sessionQuestionGenStatus(AsyncTaskStatus.PENDING)
                 .sessionName(sessionName)
-                .createTime(LocalDate.now().toString())
+                .asyncTaskUpdatedAt(LocalDateTime.now())
+                .createTime(LocalDateTime.now())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -203,6 +204,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             boolean updated = lambdaUpdate()
                     .eq(InterviewSession::getSessionId, sessionId)// 保证幂等
                     .set(InterviewSession::getSessionQuestionGenStatus, AsyncTaskStatus.FAILED) // 改为失败状态
+                    .set(InterviewSession::getAsyncTaskUpdatedAt, LocalDateTime.now()) // 刷新异步任务时间戳
                     .update();
 
             if (!updated) {
@@ -285,7 +287,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 .sessionStatus(InterviewSession.STATUS_CREATED)
                 .sessionQuestionGenStatus(AsyncTaskStatus.COMPLETED)
                 .sessionName(sessionName)
-                .createTime(LocalDate.now().toString())
+                .asyncTaskUpdatedAt(LocalDateTime.now())
+                .createTime(LocalDateTime.now())
                 .build();
         save(interviewSession);
         log.info("保存面试会话，sessionId: {}", interviewSession.getSessionId());
@@ -356,6 +359,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         if (isLast) {
             interviewSession.setSessionStatus(InterviewSession.STATUS_SUBMITTED);
             interviewSession.setSessionEvaluateStatus(AsyncTaskStatus.PENDING);
+            interviewSession.setAsyncTaskUpdatedAt(LocalDateTime.now());
         } else {
             interviewSession.setCurrentIndex(qa.currentIndex() + 1);
         }
@@ -402,6 +406,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             boolean updated = lambdaUpdate()
                     .eq(InterviewSession::getSessionId, sessionId)// 保证幂等
                     .set(InterviewSession::getSessionEvaluateStatus, AsyncTaskStatus.FAILED) // 改为失败状态
+                    .set(InterviewSession::getAsyncTaskUpdatedAt, LocalDateTime.now()) // 刷新异步任务时间戳
                     .update();
 
             if (!updated) {
@@ -502,11 +507,12 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             }
             interviewQuestionMapper.insertList(iqs);
 
-            // 更新会话：题目数量 + 出题完成
+            // 更新会话：题目数量 + 出题完成 + 刷新异步任务时间戳
             InterviewSession update = InterviewSession.builder()
                     .sessionId(sessionId)
                     .totalQuestions(iqs.size())
                     .sessionQuestionGenStatus(AsyncTaskStatus.COMPLETED)
+                    .asyncTaskUpdatedAt(LocalDateTime.now())
                     .build();
             baseMapper.updateById(update);
 
@@ -536,6 +542,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         InterviewSession update = InterviewSession.builder()
                 .sessionId(sessionId)
                 .sessionQuestionGenStatus(status)
+                .asyncTaskUpdatedAt(LocalDateTime.now())
                 .build();
         baseMapper.updateById(update);
     }
@@ -575,13 +582,14 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
             // 分支执行：resumeId 不为空走简历面试，否则（kbId）走知识库面试
             EvaluationResponseVO response = doEvaluate(session);
 
-            // 写回会话：状态改为已评估，记录总分与反馈
+            // 写回会话：状态改为已评估，记录总分与反馈 + 刷新异步任务时间戳
             InterviewSession update = InterviewSession.builder()
                     .sessionId(session.getSessionId())
                     .sessionStatus(InterviewSession.STATUS_EVALUATED)
                     .totalScore(response.overallScore())
                     .feedback(response.feedback())
                     .sessionEvaluateStatus(AsyncTaskStatus.COMPLETED)
+                    .asyncTaskUpdatedAt(LocalDateTime.now())
                     .build();
             baseMapper.updateById(update);
 
@@ -613,6 +621,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         InterviewSession update = InterviewSession.builder()
                 .sessionId(sessionId)
                 .sessionEvaluateStatus(status)
+                .asyncTaskUpdatedAt(LocalDateTime.now())
                 .build();
         baseMapper.updateById(update);
     }
