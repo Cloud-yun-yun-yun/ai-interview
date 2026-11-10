@@ -80,16 +80,12 @@ onMounted(async () => {
       <p class="loading-sub">请稍候，这可能需要几秒钟</p>
     </div>
 
-    <!-- 准备表单 -->
     <div v-else class="prep-card">
-      <!-- 头部标题 -->
       <div class="card-header">
         <h2>文字面试</h2>
         <p class="subtitle">请配置您的面试素材，开始专属挑战</p>
       </div>
-      <!-- 表单区域 -->
       <div class="form-area">
-        <!-- 简历选择 -->
         <div class="form-item"  v-if="resumeOptions.length > 0">
           <div class="label">
             <el-icon><Document /></el-icon>
@@ -140,8 +136,6 @@ onMounted(async () => {
           <el-link type="primary" @click="$router.push('/backend/knowledgeBase/upload')">去创建</el-link>
         </div>
       </div>
-
-      <!-- 开始按钮 -->
       <div class="action-footer">
         <el-button
             type="primary"
@@ -157,7 +151,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 外层背景，撑满屏幕并居中 */
 .interview-prep-container {
   min-height: 80vh;
   display: flex;
@@ -166,8 +159,6 @@ onMounted(async () => {
   background-color: #f7f9fc;
   padding: 20px;
 }
-
-/* 核心卡片 */
 .prep-card {
   width: 100%;
   max-width: 540px;
@@ -176,8 +167,6 @@ onMounted(async () => {
   padding: 40px;
   box-sizing: border-box;
 }
-
-/* 头部样式 */
 .card-header {
   margin-bottom: 32px;
 }
@@ -194,8 +183,6 @@ onMounted(async () => {
   color: #8c92a4;
   margin: 0;
 }
-
-/* 表单区域 */
 .form-area {
   display: flex;
   flex-direction: column;
@@ -208,8 +195,6 @@ onMounted(async () => {
   flex-direction: column;
   gap: 10px;
 }
-
-/* 标签样式 */
 .label {
   display: flex;
   align-items: center;
@@ -229,18 +214,13 @@ onMounted(async () => {
   margin-left: 4px;
 }
 
-/* 下拉框宽度撑满 */
 .custom-select {
   width: 100%;
 }
-
-/* 修改下拉框内部的默认高度，让它看起来更大气 */
 :deep(.el-select__wrapper) {
   padding: 8px 12px;
   border-radius: 10px;
 }
-
-/* 底部开始按钮 */
 .action-footer {
   width: 100%;
 }
@@ -256,11 +236,9 @@ onMounted(async () => {
 }
 
 .start-btn:hover {
-  background-color: #7b82f3; /* 悬浮稍微变亮 */
+  background-color: #7b82f3;
   border-color: #7b82f3;
 }
-
-/* Loading 视图 */
 .loading-view {
   display: flex;
   flex-direction: column;

@@ -13,7 +13,7 @@ const knowledgeMenus = allMenus.slice(4,6)
 
 const getIcon = (iconName: string) => {
   const icons = { Reading, DocumentAdd, Files, List, Monitor, Upload }
-  return icons[iconName] || Files // 如果找不到就默认返回 Files
+  return icons[iconName] || Files
 }
 
 const handleMenuClick = (path: string) => {
@@ -101,23 +101,21 @@ const handleLogout = async () => {
   border-right: none;
 }
 
-/* 给菜单项设置基础的内边距和外边距，为了让圆角背景好看，通常需要留点边距 */
 .my-menu :deep(.el-menu-item) {
-  margin: 4px 12px; /* 上下留白4px，左右留白12px，这样高亮背景就不会贴着边缘 */
-  border-radius: 8px; /* 设置圆角，数值可根据喜好调整 */
-  height: 50px; /* 稍微加高一点，看起来更大气 */
+  margin: 4px 12px;
+  border-radius: 8px;
+  height: 50px;
   line-height: 50px;
 }
 
-/* 重点：设置选中时的背景色 */
 .my-menu :deep(.el-menu-item.is-active) {
-  background-color: #f0f2ff; /* 这里换成你第二张图那种浅紫色背景色 */
-  color: #626aef; /* 文字和图标颜色（其实 active-text-color 已经帮你搞定了文字） */
-  font-weight: bold; /* 选中时加粗文字 */
+  background-color: #f0f2ff;
+  color: #626aef;
+  font-weight: bold;
 }
 
 .my-menu :deep(.el-menu-item:hover) {
-  background-color: #f5f7fa; /* 鼠标移上去的浅灰色背景 */
+  background-color: #f5f7fa;
 }
 
 .my-aside :deep(.el-scrollbar__wrap) {

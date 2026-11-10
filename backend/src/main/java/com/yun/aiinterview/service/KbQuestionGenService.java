@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
@@ -93,6 +94,7 @@ public class KbQuestionGenService {
         String taskId = UUID.randomUUID().toString();
         kb.setQuestionGenTaskId(taskId);
         kb.setQuestionGenStatus(QuestionGenStatus.QUEUED);
+        kb.setQuestionGenUpdatedAt(LocalDateTime.now());
         knowledgeBaseService.updateById(kb);
         sendGenerateTask(kbId, taskId);
         return toVo(kb);

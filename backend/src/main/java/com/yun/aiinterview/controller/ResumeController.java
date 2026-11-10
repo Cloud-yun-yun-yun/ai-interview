@@ -6,14 +6,12 @@ import com.yun.aiinterview.annotation.RateLimit;
 import com.yun.aiinterview.context.BaseContext;
 import com.yun.aiinterview.entity.ResumeAnalysisResponse;
 import com.yun.aiinterview.pojo.vo.ResumeAnalysisVO;
-import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
 import com.yun.aiinterview.pojo.vo.ResumeVO;
 import com.yun.aiinterview.result.Result;
 import com.yun.aiinterview.service.ResumeService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -38,31 +36,6 @@ public class ResumeController {
         Long userId = BaseContext.getCurrentId();
         ResumeAnalysisVO vo = resumeService.analysisResume(resumeId, userId);
         return Result.success(vo);
-    }
-
-    @GetMapping("/status")
-    public Result<AsyncTaskStatus> getResumeStatus(@RequestParam("resumeId") Long resumeId) {
-        Long userId = BaseContext.getCurrentId();
-        AsyncTaskStatus status = resumeService.getResumeStatus(resumeId, userId);
-        return Result.success(status);
-    }
-
-    @GetMapping("/status/batch")
-    public Result<List<ResumeAnalysisVO>> getResumeStatusBatch(@RequestParam("resumeIds") String resumeIdsStr) {
-        Long userId = BaseContext.getCurrentId();
-        List<Long> resumeIds = Arrays.stream(resumeIdsStr.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(Long::parseLong)
-                .toList();
-        List<ResumeAnalysisVO> list = resumeService.getResumeStatusBatch(resumeIds, userId);
-        return Result.success(list);
-    }
-
-    @GetMapping("/status/all")
-    public Result<List<ResumeAnalysisVO>> listResumeStatus() {
-        Long userId = BaseContext.getCurrentId();
-        return Result.success(resumeService.listResumeStatus(userId));
     }
 
     @GetMapping("/analysis/result")

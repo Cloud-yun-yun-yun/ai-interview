@@ -26,6 +26,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -56,6 +58,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
     private final VectorStore vectorStore;
     private final JdbcTemplate jdbcTemplate;
     private final AsyncTaskStreamService asyncTaskStreamService;
+    private final AsyncStateService asyncStateService;
 
     private String consumerName;
     private static final String threadName ="kb-vector-consumer";
@@ -66,7 +69,8 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                                 FileService fileService,
                                 @Qualifier("qaVectorStore") VectorStore vectorStore,
                                 JdbcTemplate jdbcTemplate,
-                                AsyncTaskStreamService asyncTaskStreamService) {
+                                AsyncTaskStreamService asyncTaskStreamService,
+                                AsyncStateService asyncStateService) {
         this.knowledgeBaseMapper = knowledgeBaseMapper;
         this.knowledgeBaseQuestionMapper = knowledgeBaseQuestionMapper;
         this.fileStorageService = fileStorageService;
@@ -74,6 +78,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         this.vectorStore = vectorStore;
         this.jdbcTemplate = jdbcTemplate;
         this.asyncTaskStreamService = asyncTaskStreamService;
+        this.asyncStateService = asyncStateService;
     }
 
     /**
@@ -124,12 +129,25 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         kb.setContentType(file.getContentType());
         kb.setStorageKey(storageKey);
         kb.setUploadedAt(LocalDateTime.now());
+        kb.setVectorStatusUpdatedAt(LocalDateTime.now());
         save(kb);
         log.info("知识库文件入库成功: kbId={}, storageKey={}", kb.getId(), storageKey);
 
         String content = fileService.parseText(file);
+        Long kbId = kb.getId();
         // 6. 触发发布异步任务（向量化等）
-        sendGenerateTask(kb.getId(), content);
+        //    必须在事务提交成功后投递消息，否则消费者可能先于提交读到不到记录而误报"知识库不存在"
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            sendGenerateTask(kbId, content);
+                        }
+                    });
+        } else {
+            sendGenerateTask(kbId, content);
+        }
 
         return kb;
     }
@@ -148,16 +166,11 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         );
         try {
             String messageId = asyncTaskStreamService.sendTask(KB_VECTORIZE_STREAM_KEY, messages);
-            log.info("题目生成任务已发送到Stream, messageId={}", messageId);
+            log.info("知识库向量化任务已发送到Stream, messageId={}", messageId);
         } catch (Exception e) {
-            boolean updated = lambdaUpdate()
-                    .eq(KnowledgeBase::getId, kbId)// 保证幂等
-                    .set(KnowledgeBase::getVectorStatus, AsyncTaskStatus.FAILED) // 改为失败状态
-                    .update();
+            asyncStateService.vectorMarkFailed(kbId);
+            log.warn("入队失败后更新状态失败，可能任务已被覆盖或删除, kbId={}", kbId);
 
-            if (!updated) {
-                log.warn("入队失败后更新状态失败，可能任务已被覆盖或删除, kbId={}", kbId);
-            }
         }
     }
     @PostConstruct
@@ -190,26 +203,32 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
             log.warn("知识库不存在，丢弃: messageId={}", messageId);
             // 确认消息
             asyncTaskStreamService.ackMessage(KB_VECTORIZE_STREAM_KEY, KB_VECTORIZE_GROUP_NAME, messageId);
-            throw new BusinessException(HttpStatus.NOT_FOUND, "知识库不存在: kbId=" + kbId);
+            if(!asyncStateService.vectorMarkFailed(kbId)){
+                return;
+            }
         }
         try {
+            if(!asyncStateService.vectorMarkProcessing(kbId)){
+                log.warn("知识库向量化任务已被处理，丢弃: messageId={}", messageId);
+                asyncTaskStreamService.ackMessage(KB_VECTORIZE_STREAM_KEY, KB_VECTORIZE_GROUP_NAME, messageId);
+                return;
+            }
             //开始向量化
             Integer totalChunks = vectorizeAndStore(kbId, content);
             // 更新状态为成功
-            kb.setVectorStatus(AsyncTaskStatus.COMPLETED);
-            kb.setChunkCount(totalChunks);
-            log.info("知识库向量化状态设置为完成: kbId={}, chunks={}", kbId, totalChunks);
-            updateById(kb);
-            //确认消息
-            asyncTaskStreamService.ackMessage(KB_VECTORIZE_STREAM_KEY, KB_VECTORIZE_GROUP_NAME, messageId);
+            boolean ok = asyncStateService.vectorMarkCompleted(kbId, totalChunks);
+            if (ok) {
+                log.info("知识库向量化状态设置为完成: kbId={}, chunks={}", kbId, totalChunks);
+            } else {
+                log.info("向量化已完成或状态无效，跳过: kbId={}", kbId);
+            }
         } catch (Exception e) {
             try{
                 log.error("知识库向量化任务处理异常: messageId={}", messageId, e);
                 // ACK 完之后，再根据重试次数决定是标记失败，还是发新消息重试
                 if (Integer.parseInt(retryCount) >= AsyncTaskConstants.MAX_RETRY_COUNT) {
                     log.warn("知识库向量化任务重试次数超过最大重试次数，丢弃: messageId={}", messageId);
-                    kb.setVectorStatus(AsyncTaskStatus.FAILED);
-                    updateById(kb);
+                    asyncStateService.vectorMarkFailed(kbId);
                 } else {
                     sendGenerateTask(kbId, content, Integer.parseInt(retryCount) + 1);
                 }

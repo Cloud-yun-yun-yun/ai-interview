@@ -72,5 +72,8 @@ public class KnowledgeBase {
     /** 问题生成任务更新时间 */
     @TableField("question_gen_updated_at")
     private LocalDateTime questionGenUpdatedAt;
+    /** 向量化状态更新时间 */
+    @TableField("vector_status_updated_at")
+    private LocalDateTime vectorStatusUpdatedAt;
 
 }

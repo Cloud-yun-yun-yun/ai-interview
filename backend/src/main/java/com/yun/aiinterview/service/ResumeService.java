@@ -100,12 +100,10 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
     }
 
     public void uploadAndParse(Long userId, MultipartFile file) {
-        // 1. 文件非空校验
         if (file.isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "文件为空");
         }
 
-        // 2. 格式校验：仅允许常规文本/文档类简历格式
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null
                 || originalFilename.lastIndexOf('.') == -1
@@ -114,7 +112,6 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
                     "文件格式不支持，请上传 PDF、Word、Markdown、TXT 或 HTML 格式的简历");
         }
 
-        // 3. 内容 Hash 去重校验
         String fileHash = fileService.calculateHash(file);
         Long existsCount = resumeMapper.selectCount(
                 new LambdaQueryWrapper<Resume>()
@@ -124,13 +121,11 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "该简历已上传过，请勿重复上传");
         }
 
-        // 3. 简历名称
         String name = originalFilename.substring(0, originalFilename.lastIndexOf('.'));
         if (name.isBlank()) {
             name = originalFilename;
         }
 
-        // 4. 文本解析
         String text = fileService.parseText(file);
         if (text == null || text.isBlank()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "未能从 文件 中提取到文本，可能是扫描件或文件损坏");
@@ -166,7 +161,7 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
     public ResumeAnalysisVO analysisResume(Long resumeId, Long userId) {
         String lockKey = CACHE_LOCK_PREFIX + resumeId;
         return redisService.executeWithLock(lockKey, 10, TimeUnit.SECONDS, () -> {
-            // 1. 查询数据库确认是否已有分析结果
+            //查询数据库确认是否已有分析结果
             ResumeAnalysisResponse dbResponse = analysisResponseMapper.selectOne(
                     new LambdaQueryWrapper<ResumeAnalysisResponse>()
                             .eq(ResumeAnalysisResponse::getResumeId, resumeId)
@@ -176,7 +171,7 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
                 return new ResumeAnalysisVO(resumeId, AsyncTaskStatus.COMPLETED);
             }
 
-            // 2. 校验简历存在及归属
+            //校验简历存在及归属
             Resume resume = resumeMapper.selectById(resumeId);
             if (resume == null) {
                 throw new BusinessException(HttpStatus.NOT_FOUND, "简历不存在：" + resumeId);
@@ -185,13 +180,13 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
                 throw new BusinessException(HttpStatus.FORBIDDEN, "无权分析他人的简历");
             }
 
-            // 3. 已处理中，避免重复提交
+            //已处理中，避免重复提交
             if (resume.getAsyncTaskStatus() == AsyncTaskStatus.PROCESSING) {
                 log.info("简历正在分析中，resumeId={}", resumeId);
                 return new ResumeAnalysisVO(resumeId, AsyncTaskStatus.PROCESSING);
             }
 
-            // 4. 置为排队中，投递异步任务
+            //置为排队中，投递异步任务
             resume.setAsyncTaskStatus(AsyncTaskStatus.PENDING);
             resumeMapper.updateById(resume);
             sendAnalysisTask(resumeId, userId);
@@ -260,29 +255,22 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
                 return;
             }
 
-            // 幂等：如果已完成，直接 ACK 跳过
             if (AsyncTaskStatus.COMPLETED.equals(resume.getAsyncTaskStatus())) {
                 log.info("简历分析已完成，跳过重复消息: resumeId={}, messageId={}", resumeId, messageId);
                 asyncTaskStreamService.ackMessage(RESUME_ANALYSIS_STREAM_KEY, RESUME_ANALYSIS_GROUP_NAME, messageId);
                 return;
             }
 
-            // 置为处理中
             updateResumeStatus(resumeId, AsyncTaskStatus.PROCESSING);
 
-            // 执行 AI 分析
             ResumeAnalysisResponse response = doAnalysis(resume, userId);
 
-            // 1. 分析结果写入数据库
             response.setResumeId(resumeId);
             response.setUserId(userId);
             analysisResponseMapper.insert(response);
             log.info("简历分析结果已写入数据库，resumeId={}", resumeId);
 
-            // 2. 更新状态为完成
             updateResumeStatus(resumeId, AsyncTaskStatus.COMPLETED);
-
-            // 3. 确认消息
             asyncTaskStreamService.ackMessage(RESUME_ANALYSIS_STREAM_KEY, RESUME_ANALYSIS_GROUP_NAME, messageId);
         } catch (Exception e) {
             log.error("简历分析失败，resumeId={}", resumeId, e);
@@ -339,7 +327,7 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
 
     @Transactional
     public void deleteResume(Long resumeId, Long userId) {
-        // 1. 归属校验：只能删除自己的简历
+
         Resume resume = resumeMapper.selectById(resumeId);
         if (resume == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "简历不存在：" + resumeId);
@@ -348,7 +336,6 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
             throw new BusinessException(HttpStatus.FORBIDDEN, "无权删除他人的简历");
         }
 
-        // 2. 约束校验：存在"进行中（CREATED）"的面试会话时，禁止删除
         Long unfinishedCount = interviewSessionMapper.selectCount(
                 new LambdaQueryWrapper<InterviewSession>()
                         .eq(InterviewSession::getResumeId, resumeId)
@@ -358,12 +345,10 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
                     "该简历存在进行中的面试，请完成考试后再删除");
         }
 
-        // 3. 删除简历分析报告
         analysisResponseMapper.delete(
                 new LambdaQueryWrapper<ResumeAnalysisResponse>()
                         .eq(ResumeAnalysisResponse::getResumeId, resumeId));
 
-        // 4. 删除简历本身（已完成考试的会话记录保留不动）
         resumeMapper.deleteById(resumeId);
     }
 
@@ -460,40 +445,6 @@ public class ResumeService extends ServiceImpl<ResumeMapper, Resume> {
             throw new BusinessException(HttpStatus.NOT_FOUND, "该简历尚未生成分析报告");
         }
         return response;
-    }
-
-    public AsyncTaskStatus getResumeStatus(Long resumeId, Long userId) {
-        Resume resume = resumeMapper.selectOne(
-                new LambdaQueryWrapper<Resume>()
-                        .eq(Resume::getId, resumeId)
-                        .eq(Resume::getUserId, userId));
-        if (resume == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "简历不存在：" + resumeId);
-        }
-        return resume.getAsyncTaskStatus();
-    }
-
-    public List<ResumeAnalysisVO> getResumeStatusBatch(List<Long> resumeIds, Long userId) {
-        if (resumeIds == null || resumeIds.isEmpty()) {
-            return List.of();
-        }
-        List<Resume> resumes = resumeMapper.selectList(
-                new LambdaQueryWrapper<Resume>()
-                        .in(Resume::getId, resumeIds)
-                        .eq(Resume::getUserId, userId));
-        return resumes.stream()
-                .map(r -> new ResumeAnalysisVO(r.getId(), r.getAsyncTaskStatus()))
-                .collect(Collectors.toList());
-    }
-
-    public List<ResumeAnalysisVO> listResumeStatus(Long userId) {
-        return resumeMapper.selectList(
-                        new LambdaQueryWrapper<Resume>()
-                                .eq(Resume::getUserId, userId)
-                                .orderByDesc(Resume::getId))
-                .stream()
-                .map(r -> new ResumeAnalysisVO(r.getId(), r.getAsyncTaskStatus()))
-                .collect(Collectors.toList());
     }
 
     public List<ResumeVO> listResumes(Long userId) {

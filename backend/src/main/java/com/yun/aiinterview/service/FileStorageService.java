@@ -149,7 +149,6 @@ public class FileStorageService {
         if (!fileExists(fileKey)) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "文件不存在: " + fileKey);
         }
-
         try {
             GetObjectRequest getRequest = GetObjectRequest.builder()
                     .bucket(storageConfig.getBucket())
