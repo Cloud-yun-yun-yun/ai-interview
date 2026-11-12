@@ -33,7 +33,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -295,7 +295,9 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
 
         // 保存面试题目
         List<InterviewQuestion> iqs = new ArrayList<>();
-        for (InterviewQuestionVO vo : voList) {
+        for (int i = 0; i < voList.size(); i++) {
+            InterviewQuestionVO vo = voList.get(i);
+            KnowledgeBaseQuestion kbq = questionList.get(i);
             InterviewQuestion iq = InterviewQuestion
                     .builder()
                     .sessionId(interviewSession.getSessionId())
@@ -303,6 +305,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                     .type(vo.type())
                     .questionContent(vo.questionContent())
                     .topicSummary(vo.topicSummary())
+                    .referenceAnswer(kbq.getReferenceAnswer())
+                    .scoringRubric(kbq.getScoringRubric())
                     .build();
             iqs.add(iq);
         }
@@ -383,7 +387,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getSessionStatus(),
                 interviewSession.getSessionEvaluateStatus(),
                 interviewSession.getSessionQuestionGenStatus(),
-                interviewSession.getCreateTime() == null ? null : interviewSession.getCreateTime().toString(),
+                interviewSession.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                 interviewSession.getSessionName(),
                 toScoreString(interviewSession.getTotalScore()),
                 interviewSession.getFeedback()
@@ -736,7 +740,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 session.getSessionStatus(),
                 session.getSessionQuestionGenStatus(),
                 session.getSessionEvaluateStatus(),
-                session.getCreateTime() == null ? null : session.getCreateTime().toString(),
+                session.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                 session.getSessionName(),
                 toScoreString(session.getTotalScore()),
                 session.getFeedback());
@@ -754,7 +758,7 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                         s.getSessionStatus(),
                         s.getSessionEvaluateStatus(),
                         s.getSessionQuestionGenStatus(),
-                        s.getCreateTime() == null ? null : s.getCreateTime().toString(),
+                        s.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                         s.getSessionName(),
                         toScoreString(s.getTotalScore()),
                         s.getFeedback()))
