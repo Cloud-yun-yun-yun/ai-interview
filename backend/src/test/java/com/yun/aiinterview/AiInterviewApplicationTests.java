@@ -38,7 +38,7 @@ class AiInterviewApplicationTests {
     private InterviewQuestionMapper interviewQuestionMapper;
 
     /**
-     * TTS 冒烟测试：把一段文本转成 wav，落到桌面 audio-tts-smoke.wav，双击即可播放验证。
+     * TTS 冒烟测试：把一段文本转成 mp3，落到桌面 audio-tts-smoke.mp3，双击即可播放验证。
      * 运行后可 Ctrl 点击控制台里输出的文件路径打开。
      */
     @Test
@@ -46,7 +46,7 @@ class AiInterviewApplicationTests {
     void testTtsSmoke() throws IOException {
         String text = "你好，欢迎来到AI语音面试平台，请听题。请介绍一下你自己。";
         byte[] audio = dashscopeTtsService.synthesize(text);
-        Path out = Paths.get(System.getProperty("user.home"), "Desktop", "audio-tts-smoke.wav").toAbsolutePath();
+        Path out = Paths.get(System.getProperty("user.home"), "Desktop", "audio-tts-smoke.mp3").toAbsolutePath();
         Files.write(out, audio);
         System.out.println("TTS 冒烟测试完成，音频已保存到: " + out + "，大小=" + audio.length + " 字节");
         if (audio.length == 0) {
