@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-public class TtsResponseDTO {
+public class QwenTtsResponseDTO {
 
     private Output output;
 

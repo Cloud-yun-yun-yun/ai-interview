@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-public class TtsRequestDTO {
+public class QwenTtsRequestDTO {
 
     /** 模型名称，如 qwen-audio-3.1-tts-next */
     private String model;
@@ -29,8 +29,8 @@ public class TtsRequestDTO {
         private Integer channels;
     }
 
-    public static TtsRequestDTO of(String model, String text, String format, Integer sampleRate, Integer channels) {
-        TtsRequestDTO dto = new TtsRequestDTO();
+    public static QwenTtsRequestDTO of(String model, String text, String format, Integer sampleRate, Integer channels) {
+        QwenTtsRequestDTO dto = new QwenTtsRequestDTO();
         dto.setModel(model);
         Input input = new Input();
         input.setText_prompt(text);

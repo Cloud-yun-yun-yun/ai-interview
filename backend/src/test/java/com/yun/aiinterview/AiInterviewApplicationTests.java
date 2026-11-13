@@ -1,11 +1,7 @@
 package com.yun.aiinterview;
 
-import com.yun.aiinterview.entity.InterviewQuestion;
-import com.yun.aiinterview.entity.InterviewSession;
-import com.yun.aiinterview.mapper.InterviewQuestionMapper;
-import com.yun.aiinterview.mapper.InterviewSessionMapper;
-import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
-import com.yun.aiinterview.service.DashscopeTtsService;
+import com.yun.aiinterview.service.QwenTtsService;
+import com.yun.aiinterview.service.QwenAsrService;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -16,10 +12,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 
 @SpringBootTest
@@ -29,13 +21,32 @@ class AiInterviewApplicationTests {
     private ChatClient chatClient;
 
     @Autowired
-    private DashscopeTtsService dashscopeTtsService;
+    private QwenTtsService qwenTtsService;
 
     @Autowired
-    private InterviewSessionMapper interviewSessionMapper;
+    private QwenAsrService qwenAsrService;
 
-    @Autowired
-    private InterviewQuestionMapper interviewQuestionMapper;
+    @Test
+    void testAsr() throws IOException {
+        byte[] audio;
+        try (var in = getClass().getClassLoader().getResourceAsStream("audio-tts-smoke.mp3")) {
+            if (in == null) {
+                throw new IllegalStateException("resources 下找不到音频 audio-tts-smoke.mp3");
+            }
+            audio = in.readAllBytes();
+        }
+        System.out.println("读入音频大小=" + audio.length + " bytes");
+        String text = qwenAsrService.transcribe(audio, "mp3");
+        // 用 UTF-8 落盘验证编码,绕开控制台 GBK 乱码干扰
+        Path out = Paths.get("D:\\Output\\JavaCode\\ai-interview\\backend\\out\\asr-result.txt").toAbsolutePath();
+        Files.createDirectories(out.getParent());
+        Files.writeString(out, text, java.nio.charset.StandardCharsets.UTF_8);
+        System.out.println("ASR 识别结果(utf8文件): " + out);
+        System.out.println("ASR 文本长度=" + text.length() + ", 内容后附");
+        if (text.isBlank()) {
+            throw new IllegalStateException("ASR 返回空文本");
+        }
+    }
 
     /**
      * TTS 冒烟测试：把一段文本转成 mp3，落到桌面 audio-tts-smoke.mp3，双击即可播放验证。
@@ -45,7 +56,7 @@ class AiInterviewApplicationTests {
     @Disabled("需要真实 DASHSCOPE_API_KEY，保留为手动冒烟测试")
     void testTtsSmoke() throws IOException {
         String text = "你好，欢迎来到AI语音面试平台，请听题。请介绍一下你自己。";
-        byte[] audio = dashscopeTtsService.synthesize(text);
+        byte[] audio = qwenTtsService.synthesize(text);
         Path out = Paths.get(System.getProperty("user.home"), "Desktop", "audio-tts-smoke.mp3").toAbsolutePath();
         Files.write(out, audio);
         System.out.println("TTS 冒烟测试完成，音频已保存到: " + out + "，大小=" + audio.length + " 字节");

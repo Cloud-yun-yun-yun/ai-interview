@@ -1,9 +1,9 @@
 package com.yun.aiinterview.service;
 
 import cn.hutool.http.HttpUtil;
-import com.yun.aiinterview.config.DashscopeTtsProperties;
-import com.yun.aiinterview.pojo.dto.TtsRequestDTO;
-import com.yun.aiinterview.pojo.dto.TtsResponseDTO;
+import com.yun.aiinterview.config.VoiceInterviewProperties;
+import com.yun.aiinterview.pojo.dto.QwenTtsRequestDTO;
+import com.yun.aiinterview.pojo.dto.QwenTtsResponseDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -16,12 +16,12 @@ import org.springframework.web.client.RestClient;
  */
 @Slf4j
 @Service
-public class DashscopeTtsService {
+public class QwenTtsService {
 
-    private final DashscopeTtsProperties properties;
+    private final VoiceInterviewProperties properties;
     private final RestClient restClient;
 
-    public DashscopeTtsService(DashscopeTtsProperties properties, RestClient.Builder restClientBuilder) {
+    public QwenTtsService(VoiceInterviewProperties properties, RestClient.Builder restClientBuilder) {
         this.properties = properties;
         this.restClient = restClientBuilder.build();
     }
@@ -35,15 +35,15 @@ public class DashscopeTtsService {
      */
     public byte[] synthesize(String text) {
         String apiKey = resolveApiKey();
-        String baseUrl = properties.getBaseUrl();
+        String baseUrl = properties.getTts().getBaseUrl();
         if (!StringUtils.hasText(baseUrl)) {
-            throw new IllegalStateException("未配置 DashScope TTS base-url，请在 application.yaml 设置 dashscope.base-url");
+            throw new IllegalStateException("未配置 DashScope TTS base-url，请在 application.yaml 设置 voice.interview.tts.base-url");
         }
 
         String format = properties.getTts().getFormat();
         // mp3 编码固定为单声道，不带 channels；wav/pcm 才带声道
-        Integer channels = "mp3".equalsIgnoreCase(format) ? null : properties.getTts().getChannels();
-        TtsRequestDTO request = TtsRequestDTO.of(
+        Integer channels = "mp3".equalsIgnoreCase(format) ? null : 1;
+        QwenTtsRequestDTO request = QwenTtsRequestDTO.of(
                 properties.getTts().getModel(),
                 text,
                 format,
@@ -54,7 +54,7 @@ public class DashscopeTtsService {
                 properties.getTts().getModel(), format, text);
 
         // 1. POST 请求，实体类自动序列化；响应自动反序列化为 TtsResponseDTO
-        TtsResponseDTO response;
+        QwenTtsResponseDTO response;
         try {
             response = restClient.post()
                     .uri(baseUrl)
@@ -62,7 +62,7 @@ public class DashscopeTtsService {
                     .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
-                    .body(TtsResponseDTO.class);
+                    .body(QwenTtsResponseDTO.class);
         } catch (Exception e) {
             throw new IllegalStateException("TTS 请求失败: " + e.getMessage(), e);
         }
@@ -104,6 +104,6 @@ public class DashscopeTtsService {
         if (StringUtils.hasText(envKey)) {
             return envKey;
         }
-        throw new IllegalStateException("未配置 DashScope API Key，请在 application.yaml 设置 dashscope.api-key 或环境变量 DASHSCOPE_API_KEY");
+        throw new IllegalStateException("未配置语音 API Key，请在 application.yaml 设置 voice.interview.api-key 或环境变量 DASHSCOPE_API_KEY");
     }
 }

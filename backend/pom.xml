@@ -90,6 +90,7 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
+
         <!--ragadvisor坐标-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -127,12 +128,6 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
             <version>2.29.51</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>dashscope-sdk-java</artifactId>
-            <version>2.23.3</version>
         </dependency>
 
     </dependencies>
