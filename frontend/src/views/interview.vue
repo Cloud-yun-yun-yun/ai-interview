@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
 import { useRouter } from 'vue-router'
-import { Document, Collection, Loading } from '@element-plus/icons-vue'
+import {Document, Collection, Loading, ChatLineSquare, Microphone} from '@element-plus/icons-vue'
 import {ElMessage} from 'element-plus'
 import {createInterviewWithKb, createInterviewWithResume, getResumeList, getKnowledgeBaseList,
   type ResumeVO, type KnowledgeBaseVO} from "@/api/business.ts";
@@ -21,6 +21,7 @@ const selectedKnowledge = ref('')
 const resumeOptions = ref<Resume[]>([])
 const knowledgeOptions = ref<Knowledge[]>([])
 const loading = ref(false)
+const mode = ref('text')
 
 // 开始面试
 const handleStart = async () => {
@@ -82,14 +83,29 @@ onMounted(async () => {
 
     <div v-else class="prep-card">
       <div class="card-header">
-        <h2>文字面试</h2>
-        <p class="subtitle">请配置您的面试素材，开始专属挑战</p>
+        <div class="mode-selector">
+          <div class="section-title">面试模式</div>
+          <el-radio-group v-model="mode" class="custom-radio-group">
+            <el-radio value="text" border class="mode-card">
+              <div class="title">
+                <el-icon><ChatLineSquare /></el-icon> 文字面试
+              </div>
+            </el-radio>
+
+            <el-radio value="voice" border class="mode-card">
+              <div class="title">
+                <el-icon><Microphone /></el-icon> 语音面试
+              </div>
+            </el-radio>
+          </el-radio-group>
+        </div>
+
       </div>
       <div class="form-area">
         <div class="form-item"  v-if="resumeOptions.length > 0">
           <div class="label">
             <el-icon><Document /></el-icon>
-            基于简历面试 <span class="optional">(可选)</span>
+            基于简历面试
           </div>
           <el-select
               v-model="selectedResume"
@@ -114,14 +130,14 @@ onMounted(async () => {
         <div class="form-item" v-if="knowledgeOptions.length > 0">
           <div class="label">
             <el-icon><Collection /></el-icon>
-            基于知识库面试 <span class="optional">(可选)</span>
+            基于知识库面试
           </div>
           <el-select
               v-model="selectedKnowledge"
               placeholder="请选择一个已上传的知识库"
               class="custom-select"
               clearable
-              :disabled="!!selectedResume"
+              :disabled="!!selectedResume || mode === 'voice'"
           >
             <el-option
                 v-for="item in knowledgeOptions"
@@ -167,22 +183,78 @@ onMounted(async () => {
   padding: 40px;
   box-sizing: border-box;
 }
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+}
 .card-header {
   margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  gap:12px;
+}
+.mode-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
 }
 
-.card-header h2 {
-  font-size: 24px;
-  color: #1a1a1a;
-  margin: 0 0 8px 0;
+.custom-radio-group {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.mode-card {
+  flex: 1; /* 自适应平分宽度，替代写死的 200px */
+  height: auto; /* 移除固定高度，靠 padding 撑开 */
+  margin-right: 0 ; /* 覆盖 el-radio 默认 margin */
+  padding:10px;
+  border-radius: 12px;
+  border: 1.5px solid #e5e7eb;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.mode-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+/* 隐藏默认的圆形小点 */
+.mode-card :deep(.el-radio__input) {
+  display: none;
+}
+
+/* --- 选中状态的样式 --- */
+.mode-card.is-checked {
+  border-color: #6366f1 !important;
+  background-color: #f5f3ff !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 0.2s;
+  width: 100%;
+}
+.mode-card.is-checked .title {
+  color: #4f46e5;
   font-weight: 600;
 }
 
-.subtitle {
-  font-size: 14px;
-  color: #8c92a4;
-  margin: 0;
-}
 .form-area {
   display: flex;
   flex-direction: column;
@@ -206,12 +278,6 @@ onMounted(async () => {
 .label .el-icon {
   margin-right: 6px;
   color: #626aef;
-}
-
-.optional {
-  color: #a8abb2;
-  font-weight: normal;
-  margin-left: 4px;
 }
 
 .custom-select {

@@ -29,9 +29,9 @@ class AiInterviewApplicationTests {
     @Test
     void testAsr() throws IOException {
         byte[] audio;
-        try (var in = getClass().getClassLoader().getResourceAsStream("audio-tts-smoke.mp3")) {
+        try (var in = getClass().getClassLoader().getResourceAsStream("")) {
             if (in == null) {
-                throw new IllegalStateException("resources 下找不到音频 audio-tts-smoke.mp3");
+                throw new IllegalStateException("resources 下找不到音频 ");
             }
             audio = in.readAllBytes();
         }
