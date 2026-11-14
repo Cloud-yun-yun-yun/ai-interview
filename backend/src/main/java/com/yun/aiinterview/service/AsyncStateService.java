@@ -30,8 +30,6 @@ public class AsyncStateService {
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final KnowledgeBaseQuestionMapper knowledgeBaseQuestionMapper;
-    private final InterviewQuestionMapper interviewQuestionMapper;
-    private final InterviewSessionMapper interviewSessionMapper;
 
     /**
      * 问题生成任务的状态处理

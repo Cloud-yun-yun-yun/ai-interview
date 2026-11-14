@@ -31,25 +31,24 @@ public class QwenAsrService {
 
     /**
      * 语音识别：音频字节 -> 识别文本（同步阻塞）。
-     *
      * @param audio  音频字节
-     * @param format 音频格式（wav / mp3 等），为空时默认 wav
      * @return 识别文本
      */
+    public String transcribe(byte[] audio){
+        return transcribe(audio, properties.getAsr().getFormat());
+    }
     public String transcribe(byte[] audio, String format) {
         String apiKey = properties.getApiKey();
         String baseUrl = properties.getAsr().getBaseUrl();
         String model = properties.getAsr().getModel();
-        String defaultFormat = properties.getAsr().getFormat();
         Integer sampleRate = properties.getAsr().getSampleRate();
 
-        String fmt = StringUtils.hasText(format) ? format : defaultFormat;
-        String mime = "audio/" + fmt;
+        String mime = "audio/" + format;
         String dataUri = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(audio);
 
-        QwenAsrRequestDTO request = QwenAsrRequestDTO.of(model, dataUri, fmt, sampleRate);
+        QwenAsrRequestDTO request = QwenAsrRequestDTO.of(model, dataUri, format, sampleRate);
 
-        log.info("调用 DashScope ASR 识别, model={}, 音频大小={} bytes, format={}", model, audio.length, fmt);
+        log.info("调用 DashScope ASR 识别, model={}, 音频大小={} bytes, format={}", model, audio.length, format);
 
         QwenAsrResponseDTO response;
         try {

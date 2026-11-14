@@ -45,4 +45,6 @@ public class VoiceInterviewProperties {
         /** 采样率 */
         private Integer sampleRate;
     }
+
+
 }

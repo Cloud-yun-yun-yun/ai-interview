@@ -29,7 +29,6 @@ public class InterviewSession {
     // 已评估：AI 判卷完毕，分数和反馈已生成
     public static final String STATUS_EVALUATED = "EVALUATED";
 
-
     /** UUID，既是业务标识也是主键 */
     @TableId(value = "session_id", type = IdType.ASSIGN_UUID)
     private String sessionId;
@@ -84,6 +83,5 @@ public class InterviewSession {
 
     @TableField("async_task_updated_at")
     private LocalDateTime asyncTaskUpdatedAt;
-
 
 }

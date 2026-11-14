@@ -49,6 +49,39 @@ public class FileStorageService {
     public void deleteKnowledgeBase(String fileKey) {
         deleteFile(fileKey);
     }
+
+    /**
+     * 上传音频文件（复用通用字节流上传，TTS 默认 mp3）。
+     *
+     * @param data     音频字节
+     * @return 文件 key
+     */
+    public String uploadAudio(byte[] data) {
+        return uploadBytes(data,"", "voices", "audio/mpeg");
+    }
+
+    /**
+     * 上传音频到指定 fileKey（幂等场景使用，覆盖同名文件）。
+     *
+     * @param data    音频字节
+     * @param fileKey 固定存储 key，如 "voices/intro.mp3"
+     */
+    public void uploadAudioTo(byte[] data, String fileKey) {
+        try {
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(storageConfig.getBucket())
+                    .key(fileKey)
+                    .contentType("audio/mpeg")
+                    .contentLength((long) data.length)
+                    .build();
+            s3Client.putObject(putRequest, RequestBody.fromBytes(data));
+            log.info("音频指定 key 上传成功: {}", fileKey);
+        } catch (S3Exception e) {
+            log.error("上传音频到MinIo失败: {}", e.getMessage(), e);
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "音频文件存储失败: " + e.getMessage());
+        }
+    }
+
     /**
      * 通用文件上传方法
      */
@@ -77,6 +110,37 @@ public class FileStorageService {
     }
 
     /**
+     * 通用上传字节流方法（任意内容类型）。
+     *
+     * @param data        文件字节内容
+     * @param fileName    文件名（可带扩展名，用于生成存储 key）
+     * @param prefix      存储目录前缀，如 "voices" / "images"
+     * @param contentType 文件的 MIME 类型，如 "audio/mpeg" / "application/pdf"
+     * @return 文件 key
+     */
+    public String uploadBytes(byte[] data, String fileName, String prefix, String contentType) {
+        String safeName = (fileName == null || fileName.isBlank())
+                ? "file_" + UUID.randomUUID()
+                : UUID.randomUUID() + "_" + fileName;
+        String fileKey = (prefix == null || prefix.isBlank() ? "files" : prefix) + "/" + safeName;
+
+        try {
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(storageConfig.getBucket())
+                    .key(fileKey)
+                    .contentType(contentType)
+                    .contentLength((long) data.length)
+                    .build();
+            s3Client.putObject(putRequest, RequestBody.fromBytes(data));
+            log.info("字节流上传成功: {}", fileKey);
+            return fileKey;
+        } catch (S3Exception e) {
+            log.error("上传字节流到MinIo失败: {}", e.getMessage(), e);
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "文件存储失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 检查文件是否存在
      */
     public boolean fileExists(String fileKey) {
@@ -94,6 +158,7 @@ public class FileStorageService {
             return false;
         }
     }
+
     /**
      * 获取文件大小（字节）
      */
@@ -160,5 +225,4 @@ public class FileStorageService {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "文件下载失败: " + e.getMessage());
         }
     }
-
 }

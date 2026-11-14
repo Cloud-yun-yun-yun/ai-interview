@@ -15,4 +15,6 @@ public class ResourcesProperties {
     private String interviewEvaluationUser = "classpath:prompts/interview-evaluation-user.md";
     private String questionGenSystem = "classpath:prompts/knowledgebase-question-generation-system.md";
     private String questionGenUser = "classpath:prompts/knowledgebase-question-generation-user.md";
+    private String VoiceQuestionSystem = "classpath:prompts/voice-question-generation-system.md";
+    private String VoiceQuestionUer = "classpath:prompts/voice-question-generation-user.md";
 }
