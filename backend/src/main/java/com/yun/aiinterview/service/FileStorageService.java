@@ -8,11 +8,20 @@ import com.yun.aiinterview.handler.BusinessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
+import java.net.URI;
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +67,29 @@ public class FileStorageService {
      */
     public String uploadAudio(byte[] data) {
         return uploadBytes(data,"", "voices", "audio/mpeg");
+    }
+
+    /**
+     * 上传用户回答音频（保留原始扩展名，便于 ASR 推断音频格式）。
+     *
+     * @param data             音频字节
+     * @param originalFilename 原始文件名（用于推断格式与扩展名）
+     * @return 文件 key
+     */
+    public String uploadUserAudio(byte[] data, String originalFilename) {
+        return uploadBytes(data, originalFilename, "voices", resolveAudioContentType(originalFilename));
+    }
+
+    private String resolveAudioContentType(String filename) {
+        if (filename == null) {
+            return "audio/webm";
+        }
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".wav")) return "audio/wav";
+        if (lower.endsWith(".mp3")) return "audio/mpeg";
+        if (lower.endsWith(".m4a")) return "audio/mp4";
+        if (lower.endsWith(".ogg")) return "audio/ogg";
+        return "audio/webm";
     }
 
     /**
@@ -172,6 +204,48 @@ public class FileStorageService {
         } catch (S3Exception e) {
             log.error("获取文件大小失败: {} - {}", fileKey, e.getMessage());
             throw new BusinessException(HttpStatus.BAD_REQUEST, "获取文件大小失败");
+        }
+    }
+
+    /**
+     * 生成预签名下载 URL，固定 2 分钟有效期，前端可直接用于 &lt;audio&gt; 播放。
+     *
+     * @param fileKey 文件 key，如 "voices/xxx.mp3"
+     * @return 预签名 URL
+     */
+    public String generatePresignedUrl(String fileKey) {
+        return generatePresignedUrl(fileKey, Duration.ofMinutes(2));
+    }
+
+    /**
+     * 生成预签名下载 URL，前端可直接用于 &lt;audio&gt; 播放。
+     *
+     * @param fileKey 文件 key，如 "voices/xxx.mp3"
+     * @param expiry  有效期，如 Duration.ofMinutes(10)
+     * @return 预签名 URL
+     */
+    public String generatePresignedUrl(String fileKey, Duration expiry) {
+        GetObjectRequest getObjectRequest = GetObjectRequest
+                .builder()
+                .bucket(storageConfig.getBucket())
+                .key(fileKey)
+                .build();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest
+                .builder()
+                .signatureDuration(expiry)
+                .getObjectRequest(getObjectRequest)
+                .build();
+        try (S3Presigner presigner = S3Presigner.builder()
+                .endpointOverride(URI.create(storageConfig.getEndpoint()))
+                .region(Region.of(storageConfig.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(storageConfig.getAccessKey(), storageConfig.getSecretKey())))
+                // 必须与 S3Client 保持一致：MinIO 用路径风格，否则生成的 URL 形如
+                // http://<bucket>.localhost:9000/xxx，浏览器请求会得到 NoSuchBucket
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .build()) {
+            PresignedGetObjectRequest presigned = presigner.presignGetObject(presignRequest);
+            return presigned.url().toString();
         }
     }
 

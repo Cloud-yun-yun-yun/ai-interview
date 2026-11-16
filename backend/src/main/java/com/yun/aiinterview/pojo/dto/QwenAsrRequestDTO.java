@@ -1,5 +1,6 @@
 package com.yun.aiinterview.pojo.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -43,13 +44,16 @@ public class QwenAsrRequestDTO {
 
         Parameters params = new Parameters();
         params.setFormat(format);
-        params.setSample_rate(sampleRate);
+        if (sampleRate != null) {
+            params.setSample_rate(sampleRate);
+        }
         dto.setParameters(params);
         return dto;
     }
 
     @Data
     @NoArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Parameters {
         /** 音频格式：wav / mp3 / pcm 等 */
         private String format;

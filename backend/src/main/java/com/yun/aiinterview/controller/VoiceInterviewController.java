@@ -1,6 +1,7 @@
 package com.yun.aiinterview.controller;
 
 import com.yun.aiinterview.context.BaseContext;
+import com.yun.aiinterview.entity.VoiceInterviewSession;
 import com.yun.aiinterview.handler.BusinessException;
 import com.yun.aiinterview.pojo.dto.VoiceInterviewSubmitDTO;
 import com.yun.aiinterview.pojo.vo.VoiceInterviewSessionVO;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 
 @RestController
@@ -41,6 +41,12 @@ public class VoiceInterviewController {
         return Result.success(voiceInterviewService.getCurrentTurn(userId, sessionId));
     }
 
+    @GetMapping("/current/session")
+    public Result<VoiceInterviewSessionVO> getCurrentSession(@RequestParam("sessionId") String sessionId) {
+        Long userId = BaseContext.getCurrentId();
+        return Result.success(voiceInterviewService.getSession(userId,sessionId));
+    }
+
     @GetMapping("/session/list")
     public Result<List<VoiceInterviewSessionVO>> getSessionList() {
         Long userId = BaseContext.getCurrentId();
@@ -48,7 +54,7 @@ public class VoiceInterviewController {
     }
 
     @PostMapping("/submit/turn")
-    public Result<VoiceInterviewTurnVO> submit(VoiceInterviewSubmitDTO dto){
+    public Result<VoiceInterviewSessionVO> submit(@RequestBody VoiceInterviewSubmitDTO dto){
         Long userId = BaseContext.getCurrentId();
         return Result.success(voiceInterviewService.submit(userId,dto));
     }
@@ -58,11 +64,11 @@ public class VoiceInterviewController {
         if(file.isEmpty()){
             throw new BusinessException(HttpStatus.BAD_REQUEST,"文件不可为空");
         }
-        if (!isMp3(file)) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST,"文件类型必须为mp3格式");
+        if (!isSupportedAudio(file)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST,"文件类型必须为音频格式(mp3/wav/webm/m4a)");
         }
-        try(InputStream in = file.getInputStream()){
-            String key = voiceInterviewService.uploadAudio(in);
+        try {
+            String key = voiceInterviewService.uploadAudio(file.getBytes(), file.getOriginalFilename());
             return Result.success(key);
         }catch(IOException e){
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR,e.getMessage());
@@ -85,10 +91,16 @@ public class VoiceInterviewController {
         return Result.success();
     }
 
-    private boolean isMp3(MultipartFile file) {
+    private boolean isSupportedAudio(MultipartFile file) {
         String name = file.getOriginalFilename();
-        if (name != null && name.toLowerCase().endsWith(".mp3")) return true;
+        if (name != null) {
+            String lower = name.toLowerCase();
+            if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".webm")
+                    || lower.endsWith(".m4a") || lower.endsWith(".ogg")) {
+                return true;
+            }
+        }
         String ct = file.getContentType();
-        return ct != null && (ct.equals("audio/mpeg") || ct.equals("audio/mp3"));
+        return ct != null && ct.startsWith("audio/");
     }
 }

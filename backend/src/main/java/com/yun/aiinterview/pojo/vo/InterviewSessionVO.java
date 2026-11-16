@@ -10,6 +10,7 @@ public record InterviewSessionVO(
         String createTime,
         String sessionName,
         String totalScore,
-        String feedback
+        String feedback,
+        String type
 ) {
 }

@@ -41,7 +41,8 @@ public class QwenAsrService {
         String apiKey = properties.getApiKey();
         String baseUrl = properties.getAsr().getBaseUrl();
         String model = properties.getAsr().getModel();
-        Integer sampleRate = properties.getAsr().getSampleRate();
+        // wav 的采样率内嵌在文件头，交给模型从文件头读取，避免与录制时的实际采样率冲突
+        Integer sampleRate = "wav".equalsIgnoreCase(format) ? null : properties.getAsr().getSampleRate();
 
         String mime = "audio/" + format;
         String dataUri = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(audio);

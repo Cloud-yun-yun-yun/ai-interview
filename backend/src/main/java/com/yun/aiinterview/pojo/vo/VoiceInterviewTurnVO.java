@@ -7,6 +7,6 @@ public record VoiceInterviewTurnVO(
         String sessionId,
         Integer turnIndex,
         String questionContent,
-        String questionAudioKey
+        String questionAudioUrl
 ) {
 }

@@ -34,8 +34,8 @@ public class AuthorityInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // 续期
-        redisTemplate.expire(TOKEN_PREFIX + token, 30, TimeUnit.MINUTES);
+        // 续期：保持与登录一致的 7 天滑动有效期
+        redisTemplate.expire(TOKEN_PREFIX + token, 7, TimeUnit.DAYS);
 
         BaseContext.setCurrentId(Long.valueOf(userId));
 

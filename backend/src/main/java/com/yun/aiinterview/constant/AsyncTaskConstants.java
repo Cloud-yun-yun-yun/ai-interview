@@ -15,6 +15,8 @@ public class AsyncTaskConstants {
     public static final String FIELD_USER_ID = "userId";
 
     public static final String FIELD_SESSION_ID = "sessionId";
+
+    public static final String FIELD_TURN_INDEX = "turnIndex";
     //Stream消费消息的参数
 
     /**
@@ -103,4 +105,17 @@ public class AsyncTaskConstants {
      * 面试出题 Consumer 名称前缀
      */
     public static final String INTERVIEW_QUESTION_GEN_CONSUMER_PREFIX = "interview-question-gen-consumer-";
+
+    /**
+     * 语音面试出题 Stream Key
+     */
+    public static final String VOICE_QUESTION_GEN_STREAM_KEY = "voice:question-gen:stream";
+    /**
+     * 语音面试出题 Consumer Group 名称
+     */
+    public static final String VOICE_QUESTION_GEN_GROUP_NAME = "voice-question-gen-group";
+    /**
+     * 语音面试出题 Consumer 名称前缀
+     */
+    public static final String VOICE_QUESTION_GEN_CONSUMER_PREFIX = "voice-question-gen-consumer-";
 }

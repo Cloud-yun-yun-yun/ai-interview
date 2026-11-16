@@ -84,4 +84,8 @@ public class InterviewSession {
     @TableField("async_task_updated_at")
     private LocalDateTime asyncTaskUpdatedAt;
 
+    /** 会话类型：固定为文字面试 */
+    public String getType() {
+        return "text";
+    }
 }

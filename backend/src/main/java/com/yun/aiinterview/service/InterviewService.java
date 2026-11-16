@@ -183,7 +183,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getCreateTime().toString(),
                 interviewSession.getSessionName(),
                 toScoreString(interviewSession.getTotalScore()),
-                interviewSession.getFeedback());
+                interviewSession.getFeedback(),
+                interviewSession.getType());
         return interviewSessionVO;
     }
 
@@ -321,7 +322,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getCreateTime().toString(),
                 interviewSession.getSessionName(),
                 toScoreString(interviewSession.getTotalScore()),
-                interviewSession.getFeedback()
+                interviewSession.getFeedback(),
+                interviewSession.getType()
         );
         return interviewSessionVO;
     }
@@ -390,7 +392,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 interviewSession.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                 interviewSession.getSessionName(),
                 toScoreString(interviewSession.getTotalScore()),
-                interviewSession.getFeedback()
+                interviewSession.getFeedback(),
+                interviewSession.getType()
         );
     }
 
@@ -743,7 +746,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                 session.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                 session.getSessionName(),
                 toScoreString(session.getTotalScore()),
-                session.getFeedback());
+                session.getFeedback(),
+                session.getType());
     }
 
     public List<InterviewSessionVO> listSessions(Long userId) {
@@ -761,7 +765,8 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
                         s.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                         s.getSessionName(),
                         toScoreString(s.getTotalScore()),
-                        s.getFeedback()))
+                        s.getFeedback(),
+                        s.getType()))
                 .toList();
     }
 

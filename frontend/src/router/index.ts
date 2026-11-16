@@ -116,6 +116,15 @@ const router = createRouter({
             title: '面试记录详情',
             icon: 'DocumentDetail'
           }
+        },
+        {
+          path:'voice/interview/exam/:sessionId',
+          name:'voiceInterview',
+          component: ()=> import('@/views/voiceInterviewExam.vue'),
+          meta: {
+            title: '语音面试',
+            icon: 'Microphone'
+          }
         }
       ]
     }

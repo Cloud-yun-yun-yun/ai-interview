@@ -67,7 +67,7 @@ export function getResumeDetail(resumeId: number) {
     return service.get<ResumeAnalysisResponse>('/api/resume/analysis/result', { params: { resumeId } }) as any
 }
 
-export function removeSession(sessionId) {
+export function removeSession(sessionId: string) {
     return service.delete(`/api/interview/session/remove`, {
         params: { sessionId: sessionId }
     })
@@ -93,6 +93,7 @@ export interface InterviewSessionVO {
     sessionName: string;
     totalScore: string;
     feedback:string;
+    type: string;
 }
 
 export interface CreateInterviewSessionDTO {
@@ -170,4 +171,79 @@ export interface QuestionGenStatusVO {
 }
 export function generateKnowledgeBaseQuestions(kbId: number | string) {
     return service.post<QuestionGenStatusVO>('/api/kbs/generate', { kbId }) as any
+}
+
+// ==================== 语音面试 ====================
+
+export interface VoiceSessionVO {
+    sessionId: string;
+    userId: number;
+    currentTurn: number;
+    totalTurns: number;
+    sessionStatus: string;
+    evaluationStatus?: AsyncTaskStatus;
+    resumeId: number;
+    introAudioUrl: string;
+    outroAudioUrl?: string;
+    createTime: string;
+    sessionName: string;
+    totalScore?: number;
+    feedback?: string;
+    type: string;
+    questionGenStatus?: QuestionGenStatus;
+}
+
+export interface VoiceTurnVO {
+    sessionId: string;
+    turnIndex: number;
+    questionContent: string;
+    questionAudioUrl: string;
+}
+
+export interface VoiceSubmitDTO {
+    sessionId: string;
+    userAudioKey: string;
+    turnIndex: number;
+}
+
+/** 创建语音面试会话 */
+export function createVoiceInterviewSession(resumeId: number | string) {
+    return service.post<VoiceSessionVO>('/api/interview/voice/session/create', null, {
+        params: { resumeId }
+    }) as any
+}
+
+/** 获取当前回合（问题 + 音频 url） */
+export function getVoiceCurrentTurn(sessionId: string) {
+    return service.get<VoiceTurnVO>('/api/interview/voice/current/turn', { params: { sessionId } }) as any
+}
+
+/** 语音面试会话列表 */
+export function getVoiceSessionList() {
+    return service.get<VoiceSessionVO[]>('/api/interview/voice/session/list') as any
+}
+
+/**获取当前语音面试会话*/
+export function getVoiceSession(sessionId:string){
+    return service.get<VoiceSessionVO>('/api/interview/voice/current/session', { params: { sessionId }}) as any
+}
+
+
+/** 提交当前回合回答（先上传音频拿 key，再调用本方法），返回会话 VO 用于轮询出题状态 */
+export function submitVoiceTurn(dto: VoiceSubmitDTO) {
+    return service.post<VoiceSessionVO>('/api/interview/voice/submit/turn', dto) as any
+}
+
+/** 上传用户回答音频，返回存储 key（上传成功后再调用 submitVoiceTurn） */
+export function uploadVoiceAudio(file: Blob, filename = 'answer.mp3') {
+    const formData = new FormData()
+    formData.append('file', file, filename)
+    return service.post<string>('/api/interview/voice/audio/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }) as any
+}
+
+/** 删除语音面试会话 */
+export function deleteVoiceSession(sessionId: string) {
+    return service.delete('/api/interview/voice/session/remove', { params: { sessionId } }) as any
 }

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.yun.aiinterview.pojo.vo.AsyncTaskStatus;
+import com.yun.aiinterview.pojo.vo.QuestionGenStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,10 +27,10 @@ public class VoiceInterviewSession {
 
     // --- 状态机常量定义 ---
     /** 已创建：第 1 题已准备，等待开始 */
-    public static final String STATUS_READY = "READY";
+    public static final String STATUS_CREATED = "CREATED";
     /** 进行中：已进入回合问答 */
-    public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
-    /** 已结束：所有回合作答完毕，等待/已完成评估 */
+    public static final String STATUS_SUBMITTED = "SUBMITTED";
+    /** 已结束：所有回合作答完毕，视为已完成 */
     public static final String STATUS_FINISHED = "FINISHED";
 
     /** UUID，既是业务标识也是主键 */
@@ -40,7 +41,7 @@ public class VoiceInterviewSession {
     @TableField("user_id")
     private Long userId;
 
-    /** 会话状态：READY / IN_PROGRESS / FINISHED */
+    /** 会话状态：CREATED / SUBMITTED / FINISHED */
     @TableField("session_status")
     private String sessionStatus;
 
@@ -59,6 +60,10 @@ public class VoiceInterviewSession {
     /** 首题（固定开场自我介绍）音频存储 key，会话创建时生成固定落库 */
     @TableField("intro_audio_key")
     private String introAudioKey;
+
+    /** 结语音频存储 key，会话创建时写入 */
+    @TableField("outro_audio_key")
+    private String outroAudioKey;
 
     /** 异步评估状态 */
     @TableField("evaluation_status")
@@ -80,4 +85,11 @@ public class VoiceInterviewSession {
     @TableField("create_time")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
+
+    private QuestionGenStatus questionGenStatus = QuestionGenStatus.NONE;
+
+    /** 会话类型：固定为语音面试 */
+    public String getType() {
+        return "voice";
+    }
 }

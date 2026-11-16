@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {type AsyncTaskStatus, getSessionList, type InterviewSessionVO, removeSession} from "@/api/business"
+import {type AsyncTaskStatus, getSessionList, getVoiceSessionList, type InterviewSessionVO, type VoiceSessionVO, removeSession, deleteVoiceSession} from "@/api/business"
 import {ElMessage, ElMessageBox} from "element-plus"
 import {
   Monitor,
@@ -34,8 +34,13 @@ const checkTask = ()=>{
   stopPolling()
   pollTimer = setTimeout(async ()=>{
     try{
-      const res = await getSessionList()
-      console.log(res)
+      const [textRes, voiceRes] = await Promise.all([
+        getSessionList(),
+        getVoiceSessionList(),
+      ])
+      const textSessions = (textRes || []) as InterviewSessionVO[]
+      const voiceSessions = (voiceRes || []).map(v => toSessionVO(v))
+      const res = [...textSessions, ...voiceSessions]
       sessions.value = res
       const hasEvaluating = res.some((item) =>
           item.sessionStatus === 'SUBMITTED' &&
@@ -59,8 +64,13 @@ const checkTask = ()=>{
 const loadSessions = async () => {
   loading.value = true
   try {
-    const res = await getSessionList() as InterviewSessionVO[] | null
-    sessions.value = res || []
+    const [textRes, voiceRes] = await Promise.all([
+      getSessionList(),
+      getVoiceSessionList(),
+    ])
+    const textSessions = (textRes || []) as InterviewSessionVO[]
+    const voiceSessions = (voiceRes || []).map(v => toSessionVO(v))
+    sessions.value = [...textSessions, ...voiceSessions]
   } catch (error) {
     console.error('获取面试记录失败:', error)
     ElMessage.error('获取面试记录失败，请稍后重试')
@@ -69,13 +79,36 @@ const loadSessions = async () => {
   }
 }
 
+// 将语音面试会话映射为与文字面试一致的展示结构
+const toSessionVO = (v: VoiceSessionVO): InterviewSessionVO => ({
+  sessionId: v.sessionId,
+  userId: v.userId,
+  currentIndex: v.currentTurn,
+  sessionStatus: v.sessionStatus,
+  sessionQuestionGenStatus: undefined as any,
+  sessionEvaluateStatus: v.evaluationStatus,
+  createTime: v.createTime,
+  sessionName: v.sessionName,
+  totalScore: v.totalScore == null ? undefined as any : String(v.totalScore),
+  feedback: v.feedback,
+  type: v.type || 'voice',
+})
+
 const isInProgress = (s: InterviewSessionVO) => s.sessionStatus === 'CREATED'
 
 const handleContinue = (s: InterviewSessionVO) => {
-  router.push(`/backend/interview/exam/${s.sessionId}`)
+  if(s.type==='text') {
+    router.push(`/backend/interview/exam/${s.sessionId}`)
+  }
+  else if(s.type==='voice') {
+    router.push(`/backend/voice/interview/exam/${s.sessionId}`)
+  }
 }
 
 const handleRowClick = (s: InterviewSessionVO) => {
+  if (s.type === 'voice') {
+    return
+  }
   router.push(`/backend/record/evaluate/${s.sessionId}`)
 }
 
@@ -85,7 +118,7 @@ const statusMap: Record<AsyncTaskStatus, { icon: any; text: string; color: strin
   COMPLETED: { icon: CircleCheck, text: '已完成', color: '#67c23a' },
   FAILED: { icon: CircleClose, text: '失败', color: '#f56c6c' },
 };
-const handleDelete = async (sessionId:string)=>{
+const handleDelete = async (row: InterviewSessionVO | VoiceSessionVO)=>{
   try {
     // 1. 弹出确认框
     await ElMessageBox.confirm(
@@ -97,8 +130,12 @@ const handleDelete = async (sessionId:string)=>{
           type: 'warning',
         }
     )
-    await removeSession(sessionId)
-    sessions.value = sessions.value.filter(item => item.sessionId !== sessionId)
+    if (row.type === 'voice') {
+      await deleteVoiceSession(row.sessionId)
+    } else {
+      await removeSession(row.sessionId)
+    }
+    sessions.value = sessions.value.filter(item => item.sessionId !== row.sessionId)
     ElMessage.success('删除成功')
   } catch (error: any) {
     if (error === 'cancel' || error?.message === 'cancel') {
@@ -143,6 +180,12 @@ const handleDelete = async (sessionId:string)=>{
           <span>{{ row.sessionName }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="类型" min-width="120" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row.type === 'voice'" type="success" effect="light">语音面试</el-tag>
+          <el-tag v-else effect="light">文字面试</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="创建时间" prop="createTime" min-width="120" align="center">
         <template #default="{ row }">
           <span>{{ row.createTime }}</span>
@@ -169,8 +212,14 @@ const handleDelete = async (sessionId:string)=>{
       </el-table-column>
       <el-table-column label="当前进度" min-width="100" align="center">
         <template #default="{ row }">
-          <span v-if="row.status === 'CREATED'">第 {{ row.currentIndex }} 题</span>
-          <span v-else>已完成</span>
+          <template v-if="row.type === 'voice'">
+            <span v-if="row.sessionStatus === 'FINISHED'" style="color: #909399;">已完成</span>
+            <span v-else style="color: #606266;">进行中</span>
+          </template>
+          <template v-else>
+            <span v-if="row.status === 'CREATED'">第 {{ row.currentIndex }} 题</span>
+            <span v-else>已完成</span>
+          </template>
         </template>
       </el-table-column>
       <el-table-column label="操作" min-width="120"  align="center">
@@ -191,7 +240,7 @@ const handleDelete = async (sessionId:string)=>{
       </el-table-column>
       <el-table-column label="删除" width="100" align="center">
         <template  #default="{ row }">
-          <el-icon @click.stop="handleDelete(row.sessionId)"
+          <el-icon @click.stop="handleDelete(row)"
                    class="delete-icon"
                    size="16" >
             <Delete/></el-icon>

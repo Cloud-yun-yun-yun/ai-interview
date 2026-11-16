@@ -11,10 +11,13 @@ public record VoiceInterviewSessionVO(
         String sessionStatus,
         AsyncTaskStatus evaluationStatus,
         Long resumeId,
-        String introAudioKey,
+        String introAudioUrl,
+        String outroAudioUrl,
         String createTime,
         String sessionName,
         Integer totalScore,
-        String feedback
+        String feedback,
+        String type,
+        QuestionGenStatus questionGenStatus
 ) {
 }

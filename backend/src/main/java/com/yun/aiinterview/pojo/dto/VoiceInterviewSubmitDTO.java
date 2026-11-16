@@ -6,9 +6,6 @@ import lombok.Builder;
 public record VoiceInterviewSubmitDTO(
         String sessionId,
         String userAudioKey,
-        Integer turnIndex,
-        String questionContent,
-        String questionAudioKey,
-        Long resumeId
+        Integer turnIndex
 ) {
 }

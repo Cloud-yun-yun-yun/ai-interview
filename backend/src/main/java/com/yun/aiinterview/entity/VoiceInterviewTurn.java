@@ -42,8 +42,4 @@ public class VoiceInterviewTurn {
     /** 用户回答文本（ASR 识别结果） */
     @TableField("user_answer")
     private String userAnswer;
-
-    /** 该题是否允许被追问 */
-    @TableField("is_follow_up")
-    private Boolean isFollowUp;
 }

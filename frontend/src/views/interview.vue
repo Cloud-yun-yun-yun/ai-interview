@@ -3,7 +3,7 @@ import {onMounted, ref} from 'vue'
 import { useRouter } from 'vue-router'
 import {Document, Collection, Loading, ChatLineSquare, Microphone} from '@element-plus/icons-vue'
 import {ElMessage} from 'element-plus'
-import {createInterviewWithKb, createInterviewWithResume, getResumeList, getKnowledgeBaseList,
+import {createInterviewWithKb, createInterviewWithResume, getResumeList, getKnowledgeBaseList, createVoiceInterviewSession,
   type ResumeVO, type KnowledgeBaseVO} from "@/api/business.ts";
 
 const router = useRouter()
@@ -34,6 +34,18 @@ const handleStart = async () => {
   }
   loading.value = true
   try {
+    if (mode.value === 'voice') {
+      if (!resumeId) {
+        ElMessage.warning('语音面试需选择一份简历')
+        loading.value = false
+        return
+      }
+      const session = await createVoiceInterviewSession(resumeId)
+      if (!session?.sessionId) throw new Error('no sessionId')
+      const sessionId = session.sessionId
+      router.push({ name: 'voiceInterview', query: { sessionId } })
+      return
+    }
     const requestId = crypto.randomUUID()
     const session = resumeId
         ? await createInterviewWithResume({ resumeId, requestId })
