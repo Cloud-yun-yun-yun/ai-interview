@@ -338,6 +338,9 @@ const playOutroAudio = () => {
 const playOutroAndLeave = (vo: VoiceSessionVO) => {
   isFinished.value = true
   isGenerating.value = false
+  if (delayTimer) clearTimeout(delayTimer)
+  if (typewriterTimer) clearInterval(typewriterTimer)
+  aiReplyText.value = ''
   outroAudioUrl.value = vo.outroAudioUrl || ''
   playOutroAudio()
 }

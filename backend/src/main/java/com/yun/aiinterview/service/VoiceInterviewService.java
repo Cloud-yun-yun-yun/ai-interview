@@ -221,8 +221,9 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
                 .feedback(session.getFeedback())
                 .type(session.getType())
                 .questionGenStatus(session.getQuestionGenStatus())
-                .outroAudioUrl(session.getOutroAudioKey() != null
-                        ? fileStorageService.generatePresignedUrl(session.getOutroAudioKey()) : null)
+                .outroAudioUrl(VoiceInterviewSession.STATUS_FINISHED.equals(session.getSessionStatus())
+                        ? fileStorageService.generatePresignedUrl(resolveOutroAudioKey(session))
+                        : null)
                 .build();
         return vo;
     }
@@ -289,6 +290,14 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         }
 
         if (dto.turnIndex() >= session.getTotalTurns()) {
+            //直接asr解析文本
+            byte[] data = fileStorageService.downloadFile(dto.userAudioKey());
+            String userAnswer = qwenAsrService.transcribe(data,resolveAudioFormat(dto.userAudioKey()));
+            voiceInterviewTurnMapper.update(null,
+                    new LambdaUpdateWrapper<VoiceInterviewTurn>()
+                            .eq(VoiceInterviewTurn::getSessionId, dto.sessionId())
+                            .eq(VoiceInterviewTurn::getTurnIndex, dto.turnIndex())
+                            .set(VoiceInterviewTurn::getUserAnswer, userAnswer));
             // 末题：结束会话，无异步出题任务
             lambdaUpdate()
                     .eq(VoiceInterviewSession::getSessionId, dto.sessionId())
@@ -296,6 +305,7 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
                     .set(VoiceInterviewSession::getSessionStatus, VoiceInterviewSession.STATUS_FINISHED)
                     .set(VoiceInterviewSession::getQuestionGenStatus, QuestionGenStatus.COMPLETED)
                     .update();
+
             return getSession(userId, dto.sessionId());
         }
 
@@ -497,6 +507,15 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         if (lower.endsWith(".m4a")) return "m4a";
         if (lower.endsWith(".ogg")) return "ogg";
         return "webm";
+    }
+
+    /** 取结语音频 key：优先用会话存储值，历史会话未存时回退到固定结语 key */
+    private String resolveOutroAudioKey(VoiceInterviewSession session) {
+        String key = session.getOutroAudioKey();
+        if (key == null || key.isBlank()) {
+            key = audioInitializerService.getOutroFileKey();
+        }
+        return key;
     }
 
 
