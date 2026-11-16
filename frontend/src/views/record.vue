@@ -109,6 +109,10 @@ const handleRowClick = (s: InterviewSessionVO) => {
   if (s.type === 'voice') {
     return
   }
+  if(s.sessionStatus!='EVALUATED'){
+    ElMessage.error('请先完成考试')
+    return
+  }
   router.push(`/backend/record/evaluate/${s.sessionId}`)
 }
 
@@ -205,6 +209,9 @@ const handleDelete = async (row: InterviewSessionVO | VoiceSessionVO)=>{
               <span>{{ statusMap[row.sessionEvaluateStatus]?.text || row.sessionEvaluateStatus}}</span>
             </div>
           </template>
+          <template v-else-if="row.type==='voice'">
+            <span>暂无</span>
+          </template>
           <template v-else>
               <span>请先完成考试</span>
           </template>
@@ -236,6 +243,7 @@ const handleDelete = async (row: InterviewSessionVO | VoiceSessionVO)=>{
             <el-icon  color="#67c23a"><CircleCheck/></el-icon>
             <span style="color: #67c23a;">查看评估</span>
           </div>
+          <span v-else-if="row.sessionStatus === 'FINISHED'">已结束</span>
         </template>
       </el-table-column>
       <el-table-column label="删除" width="100" align="center">

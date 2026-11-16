@@ -84,6 +84,11 @@ const playText = (fullText: string) => {
 
 // ---------- 音频播放（单实例 + 播放状态） ----------
 const startReply = () => {
+  // 全部答完后，"重新播放"重播结束语
+  if (isFinished.value) {
+    playOutroAudio()
+    return
+  }
   const audioUrl = currentTurn.value?.questionAudioUrl
   if (!audioUrl) {
     ElMessage.warning('当前没有问题音频')
@@ -309,21 +314,32 @@ const goToRecord = () => {
   router.push({ name: 'record' })
 }
 
-// 播放结语音频，结束后跳转到面试记录页
-const playOutroAndLeave = (vo: VoiceSessionVO) => {
-  isFinished.value = true
-  isGenerating.value = false
-  const outroUrl = vo.outroAudioUrl
-  if (!outroUrl) {
+// 播放结束语，真正播完才跳转；被自动播放拦截时留在页面让用户手动重播
+const outroAudioUrl = ref('')
+const playOutroAudio = () => {
+  const url = outroAudioUrl.value
+  if (!url) {
     goToRecord()
     return
   }
   currentAudio.value?.pause()
-  const audio = new Audio(outroUrl)
+  const audio = new Audio(url)
   currentAudio.value = audio
-  audio.onended = () => goToRecord()
-  audio.onerror = () => goToRecord()
-  audio.play().catch(() => goToRecord())
+  audio.onplay = () => { isPlayingAudio.value = true }
+  audio.onended = () => { isPlayingAudio.value = false; goToRecord() }
+  audio.onerror = () => { isPlayingAudio.value = false; goToRecord() }
+  audio.play().catch((err) => {
+    // 自动播放策略拦截：不直接跳走，提示用户手动点击重新播放
+    console.error('结束语自动播放被拦截:', err)
+    isPlayingAudio.value = false
+    ElMessage.warning('自动播放被拦截，请点击"重新播放"')
+  })
+}
+const playOutroAndLeave = (vo: VoiceSessionVO) => {
+  isFinished.value = true
+  isGenerating.value = false
+  outroAudioUrl.value = vo.outroAudioUrl || ''
+  playOutroAudio()
 }
 
 onBeforeUnmount(() => {
@@ -431,6 +447,7 @@ onBeforeUnmount(() => {
           class="submit-btn"
           :icon="Promotion"
           :loading="submitting"
+          :disabled="submitting"
           @click="handleSend"
       >
         发送
