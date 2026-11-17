@@ -300,7 +300,7 @@ const pollUntilReady = () => {
       console.error(e)
       pollUntilReady()
     }
-  }, 2000)
+  }, 800)
 }
 
 // ---------- 流式播放（边收边播，首片含 WAV 头 + 后续裸 PCM） ----------

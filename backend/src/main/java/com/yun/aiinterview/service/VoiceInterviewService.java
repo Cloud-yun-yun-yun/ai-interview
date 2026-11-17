@@ -575,7 +575,7 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         String system = questionSystemPromptTemplate.render();
         String question = generateQuestionWithRetry(user, system);
 
-        // 3. 落库下一回合（仅存文本；音频由前端流式接口合成后回填 key）
+        // 3. 落库下一回合（仅存文本；音频由非流式 TTS 合成后回填 key）
         VoiceInterviewTurn nextTurn = VoiceInterviewTurn.builder()
                 .sessionId(sessionId)
                 .turnIndex(submittedTurnIndex + 1)
@@ -585,7 +585,33 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         if (turnRow != 1) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "回合记录插入失败");
         }
+        // 3.1 根据 tts.mode 决定是否后台自动合成习题音频并上传 minio 回填 key：
+        //     sync 模式（默认）自动合成；stream 模式仅生成文本，由前端调 /stream/turn 流式合成回填
+        if (qwenTtsService.isSyncMode()) {
+            synthesizeQuestionAudio(userId, sessionId, nextTurn, question);
+        }
         updateCurrentTurn(sessionId, userId, submittedTurnIndex + 1);
+    }
+
+    /**
+     * 非流式 TTS 合成当前回合习题音频：synthesizeSync 合成 -> 上传 minio -> 回填 questionAudioKey。
+     * 供前端轮询到 COMPLETED 后通过 getCurrentTurn 直接拿到音频 URL 播放。
+     */
+    private void synthesizeQuestionAudio(Long userId, String sessionId, VoiceInterviewTurn turn, String text) {
+        try {
+            byte[] audio = qwenTtsService.synthesizeSync(text);
+            if (audio == null || audio.length == 0) {
+                log.warn("非流式 TTS 返回空音频，跳过回填, sessionId={}, turn={}", sessionId, turn.getTurnIndex());
+                return;
+            }
+            String audioKey = uploadVoiceAudioTo(userId, sessionId, audio, "question.wav");
+            turn.setQuestionAudioKey(audioKey);
+            voiceInterviewTurnMapper.updateById(turn);
+            log.info("非流式 TTS 习题音频已上传落库, sessionId={}, turn={}, key={}",
+                    sessionId, turn.getTurnIndex(), audioKey);
+        } catch (Exception e) {
+            log.error("非流式 TTS 合成习题音频失败, sessionId={}, turn={}", sessionId, turn.getTurnIndex(), e);
+        }
     }
 
     private void updateQuestionGenStatus(String sessionId, QuestionGenStatus status) {

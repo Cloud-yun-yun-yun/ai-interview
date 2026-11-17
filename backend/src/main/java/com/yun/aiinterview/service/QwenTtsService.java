@@ -65,6 +65,11 @@ public class QwenTtsService {
         return properties.getTts().getSampleRate();
     }
 
+    /** 出题音频是否采用后端非流式自动合成（sync 模式）；false 表示走前端 /stream/turn 流式 */
+    public boolean isSyncMode() {
+        return !"stream".equalsIgnoreCase(properties.getTts().getMode());
+    }
+
     /**
      * 流式语音合成：边合成边回调音频分片。
      *
