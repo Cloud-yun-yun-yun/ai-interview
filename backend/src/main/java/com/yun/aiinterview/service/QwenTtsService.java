@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -144,6 +145,44 @@ public class QwenTtsService {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         streamSynthesize(text, out::writeBytes);
         return out.toByteArray();
+    }
+
+    /**
+     * 非流式语音合成：阻塞等待合成完成，一次性返回完整音频字节。
+     * 使用官方 SDK 的 callAndReturnAudio（返回 ByteBuffer 完整音频数据），非 Base64/URL。
+     *
+     * @param text 待合成的文本
+     * @return 完整音频字节（wav），若合成结果为空返回 null
+     */
+    public byte[] synthesizeSync(String text) {
+        String apiKey = resolveApiKey();
+        HttpSpeechSynthesisParam param = HttpSpeechSynthesisParam.builder()
+                .model(model())
+                .text(text)
+                .voice(voice())
+                .format(format())
+                .sampleRate(sampleRate())
+                .apiKey(apiKey)
+                .build();
+
+        log.info("调用非流式 TTS(SDK callAndReturnAudio), model={}, voice={}, format={}",
+                model(), voice(), format());
+
+        try {
+            HttpSpeechSynthesizer synthesizer = new HttpSpeechSynthesizer();
+            ByteBuffer audioData = synthesizer.callAndReturnAudio(param);
+            if (audioData == null || !audioData.hasRemaining()) {
+                log.warn("非流式 TTS 返回空音频, text={}", text);
+                return null;
+            }
+            byte[] audio = new byte[audioData.remaining()];  // ① 先申请一个 byte 数组
+            audioData.get(audio);                            // ② 把 ByteBuffer 里剩余的数据"拷贝"进这个数组
+            log.info("非流式 TTS 合成完成, 音频字节={}", audio.length);
+            return audio;
+        } catch (ApiException | NoApiKeyException | InputRequiredException e) {
+            log.error("非流式 TTS 请求失败: {}", e.getMessage(), e);
+            throw new IllegalStateException("非流式 TTS 请求失败: " + e.getMessage(), e);
+        }
     }
 
     private String resolveApiKey() {
