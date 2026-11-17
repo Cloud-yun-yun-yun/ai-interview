@@ -13,7 +13,7 @@
 
   ai:
     openai:
-      api-key: sk-ws-H.PMMYIIP.tjtk.MEYCIQD62POBJr9t7DsUeTRLHkTHKgzSEAtyhnW9AMxo7-QDTAIhAKWAe2K5-pEIGppa2SsLDWGBnNkTbb7rLDeEbN6To6Uz
+      api-key: ${ALIYUN_APIKEY}
       base-url: https://ws-snlscsj5heo4kuyy.cn-beijing.maas.aliyuncs.com/compatible-mode
       chat:
         options:
@@ -43,7 +43,7 @@ mybatis-plus:
 
 voice:
   interview:
-    api-key: sk-ws-H.PMMYIIP.tjtk.MEYCIQD62POBJr9t7DsUeTRLHkTHKgzSEAtyhnW9AMxo7-QDTAIhAKWAe2K5-pEIGppa2SsLDWGBnNkTbb7rLDeEbN6To6Uz
+    api-key: ${ALIYUN_APIKEY}
     tts:
       # DashScope SDK base host（Constants.baseHttpApiUrl）
       base-url: https://maas.qianwenaiapi.com/api/v1
@@ -61,8 +61,8 @@ voice:
 minio:
   storage:
     endpoint: http://localhost:9000
-    access-key: dHDCFdHljLTeDjT33nEb
-    secret-key: cy4Q0eXmCGn4xgvMh5wzYnFWmGHD7VgKV5YylEbV
+    access-key: ${MINIO_ACCESSKEY}
+    secret-key: ${MINIO_SECRETKEY}
     bucket: ai-interview
     region: us-east-1
     auto-create-bucket: false
