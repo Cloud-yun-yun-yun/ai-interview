@@ -268,7 +268,7 @@ const handleSubmitResult = (vo: VoiceSessionVO) => {
     pollUntilReady()
   } else if (status === 'COMPLETED') {
     isGenerating.value = false
-    fetchAndPlayCurrentTurn()
+    fetchAndStreamCurrentTurn()
   } else if (status === 'FAILED') {
     isGenerating.value = false
     ElMessage.error('出题失败，请重试')
@@ -289,7 +289,7 @@ const pollUntilReady = () => {
       const status = vo.questionGenStatus
       if (status === 'COMPLETED') {
         isGenerating.value = false
-        await fetchAndPlayCurrentTurn()
+        await fetchAndStreamCurrentTurn()
       } else if (status === 'FAILED') {
         isGenerating.value = false
         ElMessage.error('出题失败，请重试')
@@ -303,11 +303,192 @@ const pollUntilReady = () => {
   }, 2000)
 }
 
-const fetchAndPlayCurrentTurn = async () => {
+// ---------- 流式播放（边收边播，首片含 WAV 头 + 后续裸 PCM） ----------
+let streamAudioCtx: AudioContext | null = null
+let streamSources: AudioBufferSourceNode[] = []
+let streamNextTime = 0
+let streamSampleRate = 24000
+let streamChannels = 1
+let streamBitsPerSample = 16
+let hasStreamHeader = false
+let lastStreamSource: AudioBufferSourceNode | null = null
+
+const stopStreamPlayback = () => {
+  streamSources.forEach(s => { try { s.stop() } catch { /* ignore */ } })
+  streamSources = []
+  lastStreamSource = null
+  if (streamAudioCtx) {
+    streamAudioCtx.close().catch(() => {})
+    streamAudioCtx = null
+  }
+  hasStreamHeader = false
+}
+
+const base64ToBytes = (base64: string): Uint8Array => {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+// 解析 WAV 头，返回数据区偏移与格式信息（支持非标准头 / 额外 chunk）
+function parseWavHeader(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  let sampleRate = 24000
+  let channels = 1
+  let bitsPerSample = 16
+  let dataOffset = 44
+  let offset = 12
+  while (offset + 8 <= bytes.byteLength) {
+    const id = String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3))
+    const size = view.getUint32(offset + 4, true)
+    if (id === 'fmt ') {
+      channels = view.getUint16(offset + 10, true)
+      sampleRate = view.getUint32(offset + 12, true)
+      bitsPerSample = view.getUint16(offset + 22, true)
+    } else if (id === 'data') {
+      dataOffset = offset + 8
+      break
+    }
+    offset += 8 + size + (size % 2)
+  }
+  return { dataOffset, sampleRate, channels, bitsPerSample }
+}
+
+// PCM 字节 -> Float32 采样（支持 8/16-bit）
+function pcmToFloat32(bytes: Uint8Array, bitsPerSample: number): Float32Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (bitsPerSample === 8) {
+    const out = new Float32Array(bytes.byteLength)
+    for (let i = 0; i < bytes.byteLength; i++) out[i] = (view.getUint8(i) - 128) / 128
+    return out
+  }
+  const count = Math.floor(bytes.byteLength / 2)
+  const out = new Float32Array(count)
+  for (let i = 0; i < count; i++) out[i] = view.getInt16(i * 2, true) / 32768
+  return out
+}
+
+const ensureStreamCtx = async (sampleRate: number): Promise<AudioContext> => {
+  if (!streamAudioCtx) {
+    try {
+      streamAudioCtx = new AudioContext({ sampleRate })
+    } catch {
+      streamAudioCtx = new AudioContext()
+    }
+    if (streamAudioCtx.state === 'suspended') {
+      await streamAudioCtx.resume()
+    }
+    streamNextTime = streamAudioCtx.currentTime + 0.05
+  }
+  return streamAudioCtx
+}
+
+const scheduleSamples = (samples: Float32Array, channels: number, sampleRate: number) => {
+  if (!streamAudioCtx) return
+  const frames = Math.floor(samples.length / channels)
+  if (frames <= 0) return
+  const buffer = streamAudioCtx.createBuffer(channels, frames, sampleRate)
+  for (let ch = 0; ch < channels; ch++) {
+    const data = buffer.getChannelData(ch)
+    for (let i = 0; i < frames; i++) data[i] = samples[i * channels + ch]
+  }
+  const source = streamAudioCtx.createBufferSource()
+  source.buffer = buffer
+  source.connect(streamAudioCtx.destination)
+  source.onended = () => {
+    if (source === lastStreamSource) isPlayingAudio.value = false
+  }
+  lastStreamSource = source
+  source.start(streamNextTime)
+  streamNextTime += buffer.duration
+  streamSources.push(source)
+}
+
+const playStreamChunk = async (base64: string) => {
+  const bytes = base64ToBytes(base64)
+  if (!hasStreamHeader) {
+    // 第一片：完整 WAV，解析头并取出 PCM
+    const header = parseWavHeader(bytes)
+    streamSampleRate = header.sampleRate
+    streamChannels = header.channels
+    streamBitsPerSample = header.bitsPerSample
+    hasStreamHeader = true
+    await ensureStreamCtx(streamSampleRate)
+    isPlayingAudio.value = true
+    scheduleSamples(pcmToFloat32(bytes.slice(header.dataOffset), streamBitsPerSample), streamChannels, streamSampleRate)
+  } else {
+    // 后续：裸 PCM
+    await ensureStreamCtx(streamSampleRate)
+    scheduleSamples(pcmToFloat32(bytes, streamBitsPerSample), streamChannels, streamSampleRate)
+  }
+}
+
+// 通过 SSE 流式拉取当前回合语音，边收边播
+const streamVoiceTurn = async () => {
+  stopStreamPlayback()
+  const token = localStorage.getItem('token')
+  const url = `/api/interview/voice/stream/turn?sessionId=${encodeURIComponent(sessionId.value)}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok || !res.body) {
+    throw new Error('流式接口请求失败: ' + res.status)
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    buf = buf.replace(/\r\n/g, '\n')
+    let idx
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      const eventStr = buf.slice(0, idx)
+      buf = buf.slice(idx + 2)
+      for (const line of eventStr.split('\n')) {
+        if (!line.startsWith('data:')) continue
+        const json = line.slice(5).trim()
+        if (!json) continue
+        try {
+          const payload = JSON.parse(json)
+          if (payload.event === 'audio' && payload.data) {
+            await playStreamChunk(payload.data)
+          }
+        } catch (e) {
+          console.warn('SSE 分片解析失败', e)
+        }
+      }
+    }
+  }
+}
+
+// 出题完成：先取文本展示，再流式拉语音播放
+const fetchAndStreamCurrentTurn = async () => {
   const turn = await getVoiceCurrentTurn(sessionId.value)
   currentTurn.value = turn
   playText(turn.questionContent || '')
-  startReply()
+  try {
+    await streamVoiceTurn()
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('语音合成失败，请重试')
+  }
+}
+
+// 重播：重新调用 getCurrentTurn 拿最新音频 URL（流式结束后 key 已回填）
+const replayCurrentTurn = async () => {
+  if (isFinished.value) {
+    playOutroAudio()
+    return
+  }
+  try {
+    const turn = await getVoiceCurrentTurn(sessionId.value)
+    currentTurn.value = turn
+    startReply()
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('获取音频失败')
+  }
 }
 
 const goToRecord = () => {
@@ -353,6 +534,7 @@ onBeforeUnmount(() => {
   sourceNode?.disconnect()
   mediaStream?.getTracks().forEach(t => t.stop())
   audioContext?.close()
+  stopStreamPlayback()
   currentAudio.value?.pause()
 })
 
@@ -404,7 +586,7 @@ onBeforeUnmount(() => {
               size="small"
               round
               :icon="RefreshRight"
-              @click="startReply"
+              @click="replayCurrentTurn"
           >
             重新播放
           </el-button>
