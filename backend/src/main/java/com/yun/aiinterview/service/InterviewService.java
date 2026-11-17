@@ -815,6 +815,10 @@ public class InterviewService extends ServiceImpl<InterviewSessionMapper, Interv
         if (session == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "会话不存在或无权删除");
         }
+        // 仅允许删除已评估（EVALUATED）的会话
+        if (!InterviewSession.STATUS_EVALUATED.equals(session.getSessionStatus())) {
+            throw new BusinessException(HttpStatus.CONFLICT, "仅已评估完成的面试可删除");
+        }
 
         // 2. 删除关联的题目和答案
         interviewQuestionMapper.delete(new LambdaQueryWrapper<InterviewQuestion>()

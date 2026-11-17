@@ -70,7 +70,8 @@ public class VoiceInterviewController {
     }
 
     @PostMapping("/audio/upload")
-    public Result<String> uploadAudio(@RequestParam("file") MultipartFile file){
+    public Result<String> uploadAudio(@RequestParam("file") MultipartFile file,
+                                      @RequestParam("sessionId") String sessionId){
         if(file.isEmpty()){
             throw new BusinessException(HttpStatus.BAD_REQUEST,"文件不可为空");
         }
@@ -78,7 +79,8 @@ public class VoiceInterviewController {
             throw new BusinessException(HttpStatus.BAD_REQUEST,"文件类型必须为音频格式(mp3/wav/webm/m4a)");
         }
         try {
-            String key = voiceInterviewService.uploadAudio(file.getBytes(), file.getOriginalFilename());
+            Long userId = BaseContext.getCurrentId();
+            String key = voiceInterviewService.uploadAudio(userId, sessionId, file.getBytes(), file.getOriginalFilename());
             return Result.success(key);
         }catch(IOException e){
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR,e.getMessage());

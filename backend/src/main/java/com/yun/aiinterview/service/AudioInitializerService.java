@@ -20,8 +20,8 @@ public class AudioInitializerService implements ApplicationRunner {
     public static final String OUTRO =
             "本轮面试到此结束。感谢您的参与，"
                     + "您可以稍后查看面试详情。再见。祝您生活愉快！";
-    private static final String INTRO_FILE_KEY = "voices/intro.mp3";
-    private static final String OUTRO_FILE_KEY = "voices/outro.mp3";
+    private static final String INTRO_FILE_KEY = "voices/intro.wav";
+    private static final String OUTRO_FILE_KEY = "voices/outro.wav";
 
     private final QwenTtsService qwenTtsService;
     private final FileStorageService fileStorageService;
@@ -56,7 +56,7 @@ public class AudioInitializerService implements ApplicationRunner {
             return;
         }
         try {
-            byte[] audio = qwenTtsService.synthesize(text);
+            byte[] audio = qwenTtsService.synthesizeFull(text);
             fileStorageService.uploadAudioTo(audio, key);
             log.info("语音面试固定音频合成并缓存成功: {}", key);
         } catch (Exception e) {

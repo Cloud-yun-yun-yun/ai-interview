@@ -235,9 +235,10 @@ export function submitVoiceTurn(dto: VoiceSubmitDTO) {
 }
 
 /** 上传用户回答音频，返回存储 key（上传成功后再调用 submitVoiceTurn） */
-export function uploadVoiceAudio(file: Blob, filename = 'answer.mp3') {
+export function uploadVoiceAudio(sessionId: string, file: Blob, filename = 'answer.mp3') {
     const formData = new FormData()
     formData.append('file', file, filename)
+    formData.append('sessionId', sessionId)
     return service.post<string>('/api/interview/voice/audio/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     }) as any

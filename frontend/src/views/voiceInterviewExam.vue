@@ -239,7 +239,7 @@ const handleSend = async () => {
   }
   submitting.value = true
   try {
-    const key = await uploadVoiceAudio(blob, 'answer.wav')
+    const key = await uploadVoiceAudio(sessionId.value, blob, 'answer.wav')
     const vo = await submitVoiceTurn({
       sessionId: sessionId.value,
       userAudioKey: key,

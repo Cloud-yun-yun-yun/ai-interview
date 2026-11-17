@@ -24,10 +24,12 @@ public class VoiceInterviewProperties {
 
     @Data
     public static class Tts {
-        /** 语音合成网关地址 */
+        /** DashScope SDK 网关 base host（如 https://maas.qianwenaiapi.com/api/v1） */
         private String baseUrl;
         /** 模型名称 */
         private String model;
+        /** 音色 */
+        private String voice;
         /** 音频格式：wav / mp3 / pcm */
         private String format;
         /** 采样率 */

@@ -250,6 +250,67 @@ public class FileStorageService {
     }
 
     /**
+     * 上传音频到指定的完整 key（结构化路径，供按会话删除）。
+     *
+     * @param data        音频字节
+     * @param fileKey     完整存储 key
+     * @param contentType MIME 类型
+     * @return fileKey
+     */
+    public String uploadTo(byte[] data, String fileKey, String contentType) {
+        try {
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(storageConfig.getBucket())
+                    .key(fileKey)
+                    .contentType(contentType)
+                    .contentLength((long) data.length)
+                    .build();
+            s3Client.putObject(putRequest, RequestBody.fromBytes(data));
+            log.info("字节流指定 key 上传成功: {}", fileKey);
+            return fileKey;
+        } catch (S3Exception e) {
+            log.error("上传字节流到MinIo失败: {}", e.getMessage(), e);
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "文件存储失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 按前缀删除对象（如整租语音面试会话对应目录下所有音频）。
+     *
+     * @param prefix 对象 key 前缀，如 "ai-interview/voiceInterview/{userId}/{sessionId}"
+     */
+    public void deleteByPrefix(String prefix) {
+        if (prefix == null || prefix.isEmpty()) {
+            log.debug("前缀为空，跳过删除");
+            return;
+        }
+        try {
+            String continuationToken = null;
+            do {
+                ListObjectsV2Request.Builder listReq = ListObjectsV2Request.builder()
+                        .bucket(storageConfig.getBucket())
+                        .prefix(prefix);
+                if (continuationToken != null) {
+                    listReq.continuationToken(continuationToken);
+                }
+                ListObjectsV2Response resp = s3Client.listObjectsV2(listReq.build());
+                for (S3Object obj : resp.contents()) {
+                    DeleteObjectRequest delReq = DeleteObjectRequest.builder()
+                            .bucket(storageConfig.getBucket())
+                            .key(obj.key())
+                            .build();
+                    s3Client.deleteObject(delReq);
+                    log.info("按前缀删除文件: {}", obj.key());
+                }
+                continuationToken = resp.isTruncated() ? resp.nextContinuationToken() : null;
+            } while (continuationToken != null);
+        } catch (S3Exception e) {
+            log.error("按前缀删除失败: {}", e.getMessage(), e);
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "按前缀删除失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 通用文件删除方法
      */
     private void deleteFile(String fileKey) {

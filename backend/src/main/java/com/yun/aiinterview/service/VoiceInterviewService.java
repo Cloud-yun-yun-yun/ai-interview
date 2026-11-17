@@ -267,7 +267,7 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
                 byte[] fullAudio = audioBuffer.toByteArray();
                 if (fullAudio.length > 0) {
                     // 流式输出的是 wav，按 wav 存储，保证重播时浏览器能正确解码
-                    String audioKey = fileStorageService.uploadUserAudio(fullAudio, "question.wav");
+                    String audioKey = uploadVoiceAudioTo(userId, sessionId, fullAudio, "question.wav");
                     turn.setQuestionAudioKey(audioKey);
                     voiceInterviewTurnMapper.updateById(turn);
                     log.info("流式 TTS 全量音频已上传落库, sessionId={}, turn={}, key={}",
@@ -338,12 +338,42 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         return vos;
     }
     
-    public String uploadAudio(byte[] data, String filename){
-        String key = fileStorageService.uploadUserAudio(data, filename);
+    public String uploadAudio(Long userId, String sessionId, byte[] data, String filename){
+        String key = uploadVoiceAudioTo(userId, sessionId, data, filename);
         if(key==null){
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR,"上传失败");
         }
         return key;
+    }
+
+    /**
+     * 用户回答 / 题目音频上传到结构化 key，便于按会话精准删除。
+     * key 形如：ai-interview/voiceInterview/{userId}/{sessionId}/{uuid}.{ext}
+     */
+    private String uploadVoiceAudioTo(Long userId, String sessionId, byte[] data, String filename){
+        String ext = resolveExt(filename);
+        String fileKey = "ai-interview/voiceInterview/" + userId + "/" + sessionId + "/"
+                + UUID.randomUUID() + (ext == null ? "" : "." + ext);
+        String contentType = resolveAudioContentType(ext);
+        return fileStorageService.uploadTo(data, fileKey, contentType);
+    }
+
+    private String resolveExt(String filename){
+        if(filename == null) return null;
+        int idx = filename.lastIndexOf('.');
+        if(idx < 0 || idx == filename.length() - 1) return null;
+        return filename.substring(idx + 1).toLowerCase();
+    }
+
+    private String resolveAudioContentType(String ext){
+        if(ext == null) return "audio/webm";
+        return switch (ext) {
+            case "wav" -> "audio/wav";
+            case "mp3" -> "audio/mpeg";
+            case "m4a" -> "audio/mp4";
+            case "ogg" -> "audio/ogg";
+            default -> "audio/webm";
+        };
     }
 
     @Transactional
@@ -605,13 +635,30 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
     }
 
     public void removeSession(Long userId, String sessionId){
+        VoiceInterviewSession session = lambdaQuery()
+                .eq(VoiceInterviewSession::getUserId, userId)
+                .eq(VoiceInterviewSession::getSessionId, sessionId)
+                .one();
+        if(session == null){
+            log.info("删除失败，没有匹配到对应的面试会话");
+            throw new BusinessException(HttpStatus.BAD_REQUEST,"请选择正确的会话");
+        }
+        // 仅允许删除已结束（FINISHED）的会话
+        if(!VoiceInterviewSession.STATUS_FINISHED.equals(session.getSessionStatus())){
+            throw new BusinessException(HttpStatus.CONFLICT, "仅已结束的面试可删除");
+        }
+        // 删除该会话在对象存储中的全部音频（按会话前缀精准删除）
+        fileStorageService.deleteByPrefix("ai-interview/voiceInterview/" + userId + "/" + sessionId);
+        // 删除关联的回合记录
+        voiceInterviewTurnMapper.delete(new LambdaQueryWrapper<VoiceInterviewTurn>()
+                .eq(VoiceInterviewTurn::getSessionId, sessionId));
+        // 删除会话本身
         boolean isSuccess = lambdaUpdate()
                 .eq(VoiceInterviewSession::getSessionId, sessionId)
                 .eq(VoiceInterviewSession::getUserId, userId)
                 .remove();
         if(!isSuccess){
-            log.info("删除失败，没有匹配到对应的面试会话");
-            throw new BusinessException(HttpStatus.BAD_REQUEST,"请选择正确的会话");
+            throw new BusinessException(HttpStatus.BAD_REQUEST,"删除失败，请重试");
         }
         log.info("删除成功，会话ID: {}", sessionId);
     }
