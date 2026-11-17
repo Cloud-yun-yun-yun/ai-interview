@@ -15,7 +15,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.List;
@@ -40,15 +39,6 @@ public class VoiceInterviewController {
         }
         Long userId = BaseContext.getCurrentId();
         return Result.success(voiceInterviewService.getCurrentTurn(userId, sessionId));
-    }
-
-    @GetMapping(value = "/stream/turn", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamTurn(@RequestParam("sessionId") String sessionId) {
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "会话Id不存在");
-        }
-        Long userId = BaseContext.getCurrentId();
-        return voiceInterviewService.streamTurn(userId, sessionId);
     }
 
     @GetMapping("/current/session")

@@ -26,19 +26,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.yun.aiinterview.constant.AsyncTaskConstants.BATCH_SIZE;
 import static com.yun.aiinterview.constant.AsyncTaskConstants.FIELD_RETRY_COUNT;
@@ -106,6 +102,13 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
 
     @Transactional
     public VoiceInterviewSessionVO createSession(Long resumeId, Long userId){
+        boolean exists = lambdaQuery()
+                .eq(VoiceInterviewSession::getResumeId, resumeId)
+                .eq(VoiceInterviewSession::getSessionStatus,VoiceInterviewSession.STATUS_CREATED)
+                .exists();
+        if(exists){
+            throw new BusinessException(HttpStatus.BAD_REQUEST,"已存在进行中的语音面试，请先完成当前面试");
+        }
         if(resumeId==null){
             throw new BusinessException(HttpStatus.BAD_REQUEST,"请选择简历");
         }
@@ -204,84 +207,6 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
                 .questionAudioUrl(url)
                 .questionContent(turn.getQuestionContent())
                 .build();
-    }
-
-    /**
-     * 流式合成当前回合题目并实时推给前端（SSE）。
-     * 不修改任何业务数据，仅读取会话与当前回合文本，起异步线程调用流式 TTS，逐个音频分片推送。
-     *
-     * @param userId    用户 id
-     * @param sessionId 会话 id
-     * @return SseEmitter；音频分片以 base64 文本事件（event=audio）推送，句子级信号（event=signal）
-     */
-    public SseEmitter streamTurn(Long userId, String sessionId) {
-        VoiceInterviewSession session = lambdaQuery()
-                .eq(VoiceInterviewSession::getUserId, userId)
-                .eq(VoiceInterviewSession::getSessionId, sessionId).one();
-        if (session == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "面试会话不存在");
-        }
-        VoiceInterviewTurn turn = voiceInterviewTurnMapper.selectOne(
-                new LambdaQueryWrapper<VoiceInterviewTurn>()
-                        .eq(VoiceInterviewTurn::getSessionId, sessionId)
-                        .eq(VoiceInterviewTurn::getTurnIndex, session.getCurrentTurn()));
-        if (turn == null || turn.getQuestionContent() == null || turn.getQuestionContent().isBlank()) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "当前回合题目未生成");
-        }
-        final String text = turn.getQuestionContent();
-
-        SseEmitter emitter = new SseEmitter(120_000L);
-        final AtomicBoolean failed = new AtomicBoolean(false);
-        // 一边推前端、一边组装整段音频，最后上传文件存储并回写 key
-        final ByteArrayOutputStream audioBuffer = new ByteArrayOutputStream();
-
-        Runnable task = () -> {
-            try {
-                qwenTtsService.streamSynthesize(text,
-                        // 句子级信号（sentence-begin / sentence-end）
-                        (type) -> {
-                            if (failed.get()) return;
-                            try {
-                                emitter.send(Map.of("event", "signal", "type", type));
-                            } catch (IOException e) {
-                                failed.set(true);
-                                log.warn("SSE 信号推送失败: {}", e.getMessage());
-                            }
-                        },
-                        // 音频分片：累积整段 + base64 推送给前端
-                        (chunk) -> {
-                            if (failed.get()) return;
-                            audioBuffer.writeBytes(chunk);
-                            try {
-                                emitter.send(Map.of(
-                                        "event", "audio",
-                                        "data", Base64.getEncoder().encodeToString(chunk)));
-                            } catch (IOException e) {
-                                failed.set(true);
-                                log.warn("SSE 音频分片推送失败: {}", e.getMessage());
-                            }
-                        });
-                emitter.complete();
-
-                // 流式合成结束后：整段音频上传文件存储，并回写 key（供重播）
-                byte[] fullAudio = audioBuffer.toByteArray();
-                if (fullAudio.length > 0) {
-                    // 流式输出的是 wav，按 wav 存储，保证重播时浏览器能正确解码
-                    String audioKey = uploadVoiceAudioTo(userId, sessionId, fullAudio, "question.wav");
-                    turn.setQuestionAudioKey(audioKey);
-                    voiceInterviewTurnMapper.updateById(turn);
-                    log.info("流式 TTS 全量音频已上传落库, sessionId={}, turn={}, key={}",
-                            sessionId, session.getCurrentTurn(), audioKey);
-                }
-            } catch (Exception e) {
-                log.error("流式 TTS 推流失败, sessionId={}", sessionId, e);
-                emitter.completeWithError(e);
-            }
-        };
-        Thread thread = new Thread(task, "voice-tts-stream-" + sessionId);
-        thread.setDaemon(true);
-        thread.start();
-        return emitter;
     }
 
     public VoiceInterviewSessionVO getSession(Long userId,String sessionId){
@@ -530,8 +455,7 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
     }
 
     /**
-     * 异步生成下一回合：ASR 识别用户回答 -> LLM 出题(仅文本) -> 落库 -> 推进进度。
-     * 音频由前端调用流式接口（/stream/turn）合成并回填 question_audio_key。
+     * 异步生成下一回合：ASR 识别用户回答 -> LLM 出题(仅文本) -> 落库 -> 非流式合成习题音频 -> 推进进度。
      */
     private void generateNextTurn(Long userId, String sessionId, Integer submittedTurnIndex) {
         // 幂等：下一回合已生成则直接推进进度
@@ -585,11 +509,8 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         if (turnRow != 1) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "回合记录插入失败");
         }
-        // 3.1 根据 tts.mode 决定是否后台自动合成习题音频并上传 minio 回填 key：
-        //     sync 模式（默认）自动合成；stream 模式仅生成文本，由前端调 /stream/turn 流式合成回填
-        if (qwenTtsService.isSyncMode()) {
-            synthesizeQuestionAudio(userId, sessionId, nextTurn, question);
-        }
+        // 3.1 后端非流式合成当前回合习题音频并上传 minio，回填 questionAudioKey
+        synthesizeQuestionAudio(userId, sessionId, nextTurn, question);
         updateCurrentTurn(sessionId, userId, submittedTurnIndex + 1);
     }
 

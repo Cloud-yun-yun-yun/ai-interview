@@ -120,7 +120,7 @@ const router = createRouter({
         {
           path:'voice/interview/exam/:sessionId',
           name:'voiceInterview',
-          component: ()=> import('@/views/voiceInterviewExamNonStream.vue'),
+          component: ()=> import('@/views/voiceInterviewExam.vue'),
           meta: {
             title: '语音面试',
             icon: 'Microphone'

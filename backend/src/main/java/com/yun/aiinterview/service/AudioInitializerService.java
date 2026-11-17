@@ -56,7 +56,7 @@ public class AudioInitializerService implements ApplicationRunner {
             return;
         }
         try {
-            byte[] audio = qwenTtsService.synthesizeFull(text);
+            byte[] audio = qwenTtsService.synthesizeSync(text);
             fileStorageService.uploadAudioTo(audio, key);
             log.info("语音面试固定音频合成并缓存成功: {}", key);
         } catch (Exception e) {

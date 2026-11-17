@@ -34,8 +34,6 @@ public class VoiceInterviewProperties {
         private String format;
         /** 采样率 */
         private Integer sampleRate;
-        /** 出题音频合成方式：sync = 后端非流式自动合成落库；stream = 仅生成文本，由前端 /stream/turn 流式合成 */
-        private String mode = "sync";
     }
 
     @Data
