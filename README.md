@@ -46,6 +46,19 @@
 
 ---
 
+## 页面截图
+
+### 简历详情
+![简历详情页面](imgs/resume-detail.png)
+
+### 文字面试
+![文字面试页面](imgs/text-interview.png)
+
+### 语音面试
+![语音面试页面](imgs/voice-interview.png)
+
+---
+
 ## 三、异步状态机详解
 
 系统把**所有耗时的 AI 任务**都放到 Redis Stream 异步消息里执行，HTTP 请求只负责"落库 + 入队 + 立即返回"。这也是本项目最核心的架构亮点之一。
