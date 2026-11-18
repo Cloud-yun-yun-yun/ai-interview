@@ -16,7 +16,8 @@ import java.nio.ByteBuffer;
 
 /**
  * DashScope 语音合成（TTS）工具类。
- * 基于官方 HttpSpeechSynthesizer SDK 做非流式合成：阻塞等待合成完成后返回整段音频字节。
+ * 基于官方 HttpSpeechSynthesizer SDK：
+ * 非流式合成 callAndReturnAudio：阻塞等待合成完成后返回整段音频字节；
  * 模型 / 音色 / 格式 / 采样率等均从 application.yaml 的 voice.interview.tts 读取。
  */
 @Slf4j
@@ -68,14 +69,7 @@ public class QwenTtsService {
      */
     public byte[] synthesizeSync(String text) {
         String apiKey = resolveApiKey();
-        HttpSpeechSynthesisParam param = HttpSpeechSynthesisParam.builder()
-                .model(model())
-                .text(text)
-                .voice(voice())
-                .format(format())
-                .sampleRate(sampleRate())
-                .apiKey(apiKey)
-                .build();
+        HttpSpeechSynthesisParam param = buildParam(text, apiKey);
 
         log.info("调用非流式 TTS(SDK callAndReturnAudio), model={}, voice={}, format={}",
                 model(), voice(), format());
@@ -95,6 +89,18 @@ public class QwenTtsService {
             log.error("非流式 TTS 请求失败: {}", e.getMessage(), e);
             throw new IllegalStateException("非流式 TTS 请求失败: " + e.getMessage(), e);
         }
+    }
+
+    /** 构建合成参数，非流式 / 流式共用 */
+    private HttpSpeechSynthesisParam buildParam(String text, String apiKey) {
+        return HttpSpeechSynthesisParam.builder()
+                .model(model())
+                .text(text)
+                .voice(voice())
+                .format(format())
+                .sampleRate(sampleRate())
+                .apiKey(apiKey)
+                .build();
     }
 
     private String resolveApiKey() {

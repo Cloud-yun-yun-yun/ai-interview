@@ -65,4 +65,4 @@ minio:
     secret-key: ${MINIO_SECRETKEY}
     bucket: ai-interview
     region: us-east-1
-    auto-create-bucket: false
+    auto-create-bucket: true

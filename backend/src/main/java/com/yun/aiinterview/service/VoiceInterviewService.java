@@ -273,11 +273,11 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
 
     /**
      * 用户回答 / 题目音频上传到结构化 key，便于按会话精准删除。
-     * key 形如：ai-interview/voiceInterview/{userId}/{sessionId}/{uuid}.{ext}
+     * key 形如：voiceInterview/{userId}/{sessionId}/{uuid}.{ext}
      */
     private String uploadVoiceAudioTo(Long userId, String sessionId, byte[] data, String filename){
         String ext = resolveExt(filename);
-        String fileKey = "ai-interview/voiceInterview/" + userId + "/" + sessionId + "/"
+        String fileKey = "voiceInterview/" + userId + "/" + sessionId + "/"
                 + UUID.randomUUID() + (ext == null ? "" : "." + ext);
         String contentType = resolveAudioContentType(ext);
         return fileStorageService.uploadTo(data, fileKey, contentType);
@@ -492,12 +492,14 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
         if (resume == null || resume.getContent() == null || resume.getContent().trim().isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "简历不存在");
         }
+        log.info("LLM开始生成下一题, sessionId={}, turnIndex={}", sessionId, submittedTurnIndex + 1);
         HashMap<String, Object> map = new HashMap<>();
         map.put("resumeContent", resume.getContent());
         map.put("qaRecords", buildQaRecords(sessionId));
         String user = questionUserPromptTemplate.render(map);
         String system = questionSystemPromptTemplate.render();
         String question = generateQuestionWithRetry(user, system);
+        log.info("LLM生成完毕, sessionId={}, turnIndex={}, question={}", sessionId, submittedTurnIndex + 1, question);
 
         // 3. 落库下一回合（仅存文本；音频由非流式 TTS 合成后回填 key）
         VoiceInterviewTurn nextTurn = VoiceInterviewTurn.builder()
@@ -595,7 +597,7 @@ public class VoiceInterviewService extends ServiceImpl<VoiceInterviewSessionMapp
             throw new BusinessException(HttpStatus.CONFLICT, "仅已结束的面试可删除");
         }
         // 删除该会话在对象存储中的全部音频（按会话前缀精准删除）
-        fileStorageService.deleteByPrefix("ai-interview/voiceInterview/" + userId + "/" + sessionId);
+        fileStorageService.deleteByPrefix("voiceInterview/" + userId + "/" + sessionId);
         // 删除关联的回合记录
         voiceInterviewTurnMapper.delete(new LambdaQueryWrapper<VoiceInterviewTurn>()
                 .eq(VoiceInterviewTurn::getSessionId, sessionId));

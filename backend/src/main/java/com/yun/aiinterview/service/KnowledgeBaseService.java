@@ -117,7 +117,8 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         }
 
         // 4. 存 MinIO，拿到存储 Key
-        String storageKey = fileStorageService.uploadKnowledgeBase(file);
+        String prefix = "knowledgebase/" + BaseContext.getCurrentId() ;
+        String storageKey = fileStorageService.uploadKnowledgeBase(file, prefix);
 
         // 5. 存库
         KnowledgeBase kb = new KnowledgeBase();

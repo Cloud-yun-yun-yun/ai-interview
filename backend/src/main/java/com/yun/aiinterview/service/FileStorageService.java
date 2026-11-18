@@ -1,6 +1,7 @@
 package com.yun.aiinterview.service;
 
 import cn.hutool.core.lang.UUID;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.yun.aiinterview.config.StorageConfigProperties;
@@ -32,6 +33,39 @@ public class FileStorageService {
     private final StorageConfigProperties storageConfig;
 
     /**
+     * 应用启动时校验并自动创建 bucket。
+     * 若 MinIO 中不存在配置的 bucket 则创建，随后应用可正常读写；
+     * 可通过 minio.storage.autoCreateBucket=false 关闭自动创建。
+     */
+    @PostConstruct
+    public void init() {
+        if (!storageConfig.isAutoCreateBucket()) {
+            log.info("autoCreateBucket=false，跳过 bucket 自动创建检查");
+            return;
+        }
+        String bucket = storageConfig.getBucket();
+        try {
+            HeadBucketRequest headRequest = HeadBucketRequest.builder()
+                    .bucket(bucket)
+                    .build();
+            s3Client.headBucket(headRequest);
+            log.info("bucket 已存在: {}", bucket);
+        } catch (NoSuchBucketException e) {
+            try {
+                CreateBucketRequest createRequest = CreateBucketRequest.builder()
+                        .bucket(bucket)
+                        .build();
+                s3Client.createBucket(createRequest);
+                log.info("bucket 自动创建成功: {}", bucket);
+            } catch (S3Exception ex) {
+                log.error("bucket 创建失败: {}", ex.getMessage(), ex);
+            }
+        } catch (S3Exception e) {
+            log.warn("检查 bucket 状态失败: {}", e.getMessage());
+        }
+    }
+
+    /**
      * 上传简历文件
      */
     public String uploadResume(MultipartFile file) {
@@ -46,10 +80,16 @@ public class FileStorageService {
     }
 
     /**
-     * 上传知识库文件
+     * 上传知识库文件到结构化目录。
+     * <p>与语音面试 key 规范保持一致：
+     * key 形如 knowledgebase/{userId}/{uuid}_{filename}
+     *
+     * @param file   上传的文件
+     * @param prefix 结构化前缀，如 "knowledgebase/1"
+     * @return 完整文件 key
      */
-    public String uploadKnowledgeBase(MultipartFile file) {
-        return uploadFile(file, "knowledgebases");
+    public String uploadKnowledgeBase(MultipartFile file, String prefix) {
+        return uploadFile(file, prefix);
     }
 
     /**
