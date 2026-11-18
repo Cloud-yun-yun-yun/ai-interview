@@ -440,7 +440,7 @@ onBeforeUnmount(() => {
     <!-- 底部输入控制区：全部答完后隐藏 -->
     <div class="voice-user-input" v-if="!isFinished">
       <!-- 左侧：麦克风切换按钮 -->
-      <div class="mic-toggle" @click="toggleListening" :class="{ 'is-recording': isListening, 'is-disabled': isPlayingAudio }">
+      <div class="mic-toggle" @click="toggleListening" :class="{ 'is-recording': isListening, 'is-disabled': isPlayingAudio || isGenerating  }">
         <el-icon v-if="isListening" class="mic-icon active"><Microphone /></el-icon>
         <el-icon v-else class="mic-icon muted"><Mute /></el-icon>
       </div>
