@@ -78,28 +78,28 @@
 
 ```mermaid
 flowchart TD
-    subgraph Frontend[前端 Vue]
-        A[用户操作<br/>上传/创建/作答] -->|调用 HTTP 接口触发任务| B
-        B[入队成功后立即返回] --> C[进入等待态<br/>loading 示意]
-        C --> D{定时间隔轮询状态接口<br/>getSessionList / getResumeList 等}
-        D -->|状态仍为 PENDING/PROCESSING| C
-        D -->|COMPLETED / FAILED| E[拿到最终数据渲染]
+    subgraph Frontend["前端 Vue"]
+        A["用户操作<br/>上传/创建/作答"] -->|"调用 HTTP 接口触发任务"| B
+        B["入队成功后立即返回"] --> C["进入等待态<br/>loading 示意"]
+        C --> D{"定时间隔轮询状态接口<br/>getSessionList / getResumeList 等"}
+        D -->|"状态仍为 PENDING/PROCESSING"| C
+        D -->|"COMPLETED / FAILED"| E["拿到最终数据渲染"]
     end
 
-    subgraph Backend[后端]
-        B --> F[(Redis Stream<br/>+ Consumer Group)]
-        F --> G[独立消费者线程<br/>批量拉取 + Pending 认领]
-        G --> H[置状态 PROCESSING]
-        H --> I{执行 AI 任务<br/>出题/评估/向量化/语音}
-        I -->|成功| J[落库 + 置 COMPLETED<br/>Ack 消息]
-        I -->|失败| K[重试次数 >= MAX_RETRY_COUNT?]
-        K -->|否| L[携带 retryCount+1 重新入队]
-        K -->|是| M[置 FAILED]
+    subgraph Backend["后端"]
+        B --> F[("Redis Stream<br/>+ Consumer Group")]
+        F --> G["独立消费者线程<br/>批量拉取 + Pending 认领"]
+        G --> H["置状态 PROCESSING"]
+        H --> I{"执行 AI 任务<br/>出题/评估/向量化/语音"}
+        I -->|"成功"| J["落库 + 置 COMPLETED<br/>Ack 消息"]
+        I -->|"失败"| K["重试次数 >= MAX_RETRY_COUNT?"]
+        K -->|"否"| L["携带 retryCount+1 重新入队"]
+        K -->|"是"| M["置 FAILED"]
         L --> F
     end
 
-    subgraph 兜底[可靠性]
-        N[MessageRetryTask 定时任务<br/>每 60s 扫描 PENDING/QUEUED]<br/>超过 2min 的陈旧任务重新入队
+    subgraph 兜底["可靠性"]
+        N["MessageRetryTask 定时任务<br/>每 60s 扫描 PENDING/QUEUED<br/>超过 2min 的陈旧任务重新入队"]
     end
     N --> F
 ```
@@ -234,3 +234,110 @@ ai-interview/
         ├── views/                    # 登录 / 简历 / 面试 / 知识库 / 语音面试等页面
         └── router/
 ```
+
+---
+
+## 七、部署指南
+
+本项目通过 `docker-compose` 一键编排 PostgreSQL / Redis / MinIO / 后端 / 前端（nginx）。**打包在本地完成，服务器上只负责传输文件 + 启动容器**，无需在服务器上安装 JDK / Maven / Node（JDK 需要单独解压到挂载目录供容器使用）。
+
+### 7.1 需要自行上传到服务器的文件
+
+| # | 文件 | 来源 | 服务器存放位置 | 说明 |
+| --- | --- | --- | --- | --- |
+| 1 | `docker-compose.yml` | 项目根目录 | `/root/project/ai-interview/docker-compose.yml` | 服务编排文件 |
+| 2 | `Dockerfile` | 后端 [backend/Dockerfile](backend/Dockerfile) | 项目根目录（与 docker-compose.yml 同级） | 后端镜像基于 ubuntu:22.04，`JAVA_HOME=/opt/java`，需与 `app.jar` 放同一目录 |
+| 3 | `app.jar` | 后端打包产物（见 7.2） | 项目根目录 `/root/project/ai-interview/app.jar` | **必须命名为 `app.jar`**，数据卷挂载到容器 `/app/app.jar` |
+| 4 | `html/`（前端静态页面） | 前端构建产物 `frontend/dist/*`（见 7.2） | `/root/project/ai-interview/nginx/html/` | 挂载为 nginx 的 `/usr/share/nginx/html` |
+| 5 | `default.conf` | 仓库 [nginx/defualt.conf](nginx/defualt.conf)，**需重命名为 `default.conf`** | `/root/project/ai-interview/nginx/default.conf` | nginx 配置：静态托管 + `/api/` 反向代理到后端 |
+| 6 | `.env` | 项目根目录 `.env` | 项目根目录 `/root/project/ai-interview/.env` | 填好自己的 `ALIYUN_APIKEY`，MinIO 密钥默认即可（见 7.4） |
+| 7 | JDK21 Linux 版安装包 | 自行下载（如 `jdk-21_linux-x64_bin.tar.gz`） | 解压到服务器 `/opt/java`，保证存在 `/opt/java/bin/java` | 挂载为容器 `/opt/java`（只读），`Dockerfile` 直接用宿主机 JDK |
+| 8 | 初始化 SQL | 后端 [backend/src/main/resources/sql/init.sql](backend/src/main/resources/sql/init.sql) | `/root/project/ai-interview/postgresql/init/init.sql` | 首次启动空数据目录时自动建表（非空目录则不会执行） |
+
+> 服务器上的 `postgresql/data`、`redis/data`、`minio/data` 数据卷目录**无需手动创建**，由 docker 自动生成。
+
+### 7.2 打包本地产物
+
+**后端打包（需要 JDK21 + Maven）：**
+
+```bash
+cd backend
+mvn clean package -DskipTests
+# 将 target/backend-0.0.1-SNAPSHOT.jar 重命名为 app.jar 后上传
+```
+
+**前端打包（需要 Node.js）：**
+
+```bash
+cd frontend
+npm install
+npm run build
+# 将 dist/ 目录下的所有内容上传到服务器的 nginx/html/ 目录
+```
+
+> 前端 axios 使用相对路径请求 `/api/...`，由 nginx 反向代理到后端，**无需任何前端环境变量配置**；`/api/` 代理超时已调至 300s 以兼容大模型长耗时接口。
+
+### 7.3 服务器最终目录结构
+
+```
+/root/project/ai-interview/
+├── docker-compose.yml
+├── Dockerfile                    # 从 backend/Dockerfile 复制
+├── .env                          # 填好 ALIYUN_APIKEY
+├── app.jar                       # 后端打包产物（必须命名为 app.jar）
+├── nginx/
+│   ├── default.conf              # 从 nginx/defualt.conf 复制并重命名
+│   └── html/                     # 前端 npm run build 产物
+├── postgresql/
+│   ├── init/                     # 放置 init.sql
+│   └── data/                     # 自动创建
+├── redis/
+│   └── data/                     # 自动创建
+└── minio/
+    └── data/                     # 自动创建
+```
+
+另外还需在服务器上解压 JDK21 到 `/opt/java`，并确认：
+- `/opt/java` 下就是 JDK 根目录（`/opt/java/bin/java` 存在），与 `Dockerfile` 的 `JAVA_HOME=/opt/java` 严格对应；
+- 应为 **Linux x64 版本**、必须是 **JDK 21**（不要用 Windows 版或 JRE）。
+
+### 7.4 配置 `.env`
+
+```bash
+# 阿里云 DashScope API Key（必填，否则后端调模型会 401）
+ALIYUN_APIKEY=sk-xxx
+# MinIO 密钥（minio 和 backend 共用，保持一致即可）
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+MINIO_ACCESSKEY=minioadmin
+MINIO_SECRETKEY=minioadmin123
+```
+
+### 7.5 启动服务
+
+```bash
+cd /root/project/ai-interview
+docker compose up -d --build     # 首次需要构建后端镜像，后续只需 up -d 即可
+docker compose ps                # 查看容器状态（全部 healthy 才算就绪）
+```
+
+| 服务 | 端口 |
+| --- | --- |
+| 前端 nginx | 80（浏览器直接访问） |
+| 后端 Spring Boot | 8080 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+| MinIO S3 / 控制台 | 9000 / 9001 |
+
+**更新后端代码后**只需替换 `app.jar` 并重启容器即可生效（jar 为数据卷挂载，无需重新 build）：
+
+```bash
+docker compose restart ai-interview-backend
+```
+
+### 7.6 注意事项
+
+1. **MinIO 地址需改成本机 IP**：`application.yaml` 中 `minio.storage.endpoint` 默认是 `http://192.168.100.129:9000`，浏览器需要直连 MinIO 做预签名直传直读，所以必须改为**服务器宿主机实际 IP**再打包 `app.jar`（后端内部访问数据库 / Redis / MinIO 走容器服务名，无需改动）。
+2. **`nginx/defualt.conf` 请务必重命名为 `default.conf`**，与 docker-compose 挂载路径及 nginx 默认加载配置一致。
+3. `postgresql/init` 只在数据目录为空时执行一次，如需重置数据库请先清空 `postgresql/data` 目录再重启容器。
+4. 前端静态文件更新后直接覆盖 `nginx/html/` 下的文件即可，nginx 会自动生效，无需重启前端容器。
