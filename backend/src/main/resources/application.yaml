@@ -2,14 +2,14 @@
   application:
     name: ai-interview
   datasource:
-    url: jdbc:postgresql://localhost:5433/interview
+    url: jdbc:postgresql://postgres:5432/interview
     username: postgres
     password: 123456
     driver-class-name: org.postgresql.Driver
   data:
     redis:
-      host: localhost
-      port: 6380
+      host: redis
+      port: 6379
 
   ai:
     openai:
@@ -57,10 +57,10 @@ voice:
       format: mp3
       # mp3 内嵌采样率，可不传 sample-rate；如需兜底非 mp3（如 wav/pcm）再按需传
       sample-rate: 16000
-#minio配置
+#minio配置（容器内通过服务名 minio 访问；Access/Secret Key 由 docker-compose 环境变量注入）
 minio:
   storage:
-    endpoint: http://localhost:9000
+    endpoint: http://192.168.100.129:9000  #一定要使用宿主机的IP地址
     access-key: ${MINIO_ACCESSKEY}
     secret-key: ${MINIO_SECRETKEY}
     bucket: ai-interview

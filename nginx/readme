@@ -1,0 +1,4 @@
+nginx 配置
+建议nginx的配置文件，命名为default.conf
+
+前端打包放入nginx的html数据卷下
