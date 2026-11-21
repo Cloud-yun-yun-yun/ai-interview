@@ -1,15 +1,11 @@
-﻿spring:
+﻿# 主配置：存放公共配置（与运行环境无关）
+# 默认 Profile 为 dev：本地直接启动即走开发环境（application-dev.yaml）
+# 部署时 docker-compose 显式设置 SPRING_PROFILES_ACTIVE=prod，会覆盖默认值生效（application-prod.yaml）
+spring:
+  profiles:
+    default: dev
   application:
     name: ai-interview
-  datasource:
-    url: jdbc:postgresql://postgres:5432/interview
-    username: postgres
-    password: 123456
-    driver-class-name: org.postgresql.Driver
-  data:
-    redis:
-      host: redis
-      port: 6379
 
   ai:
     openai:
@@ -57,10 +53,9 @@ voice:
       format: mp3
       # mp3 内嵌采样率，可不传 sample-rate；如需兜底非 mp3（如 wav/pcm）再按需传
       sample-rate: 16000
-#minio配置（容器内通过服务名 minio 访问；Access/Secret Key 由 docker-compose 环境变量注入）
+#minio通用配置（endpoint 在 dev/prod Profile 中按环境指定；Access/Secret Key 从系统环境变量读取）
 minio:
   storage:
-    endpoint: http://192.168.100.129:9000  #一定要使用宿主机的IP地址
     access-key: ${MINIO_ACCESSKEY}
     secret-key: ${MINIO_SECRETKEY}
     bucket: ai-interview

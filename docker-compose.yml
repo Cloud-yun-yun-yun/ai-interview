@@ -94,6 +94,8 @@ services:
     environment:
       # 时区
       TZ: Asia/Shanghai
+      # 激活部署环境 Profile（加载 application-prod.yaml，连接 postgres/redis/minio）
+      SPRING_PROFILES_ACTIVE: prod
       # 大模型 API Key（从 .env / 宿主机环境变量注入）
       ALIYUN_APIKEY: ${ALIYUN_APIKEY}
       # MinIO 访问密钥 & 密钥（对应 application.yaml 中 ${MINIO_ACCESSKEY} / ${MINIO_SECRETKEY}）
